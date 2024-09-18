@@ -1,9 +1,28 @@
 import os
 import torch
+import sys
 
-import models.asrf
-import models.my_asrf_asformer
-from datasets.rarp import create_dataframes,RARPDataset,collate_fn
+import sys
+import os
+
+# Print the Python path for debugging
+print("Python path:", sys.path)
+
+# Add the project root directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Print the updated Python path
+print("Updated Python path:", sys.path)
+
+# Now import from the datasets package
+from datasets.rarp import create_dataframes, RARPDataset, collate_fn
+
+from models import asformer,asrf,my_asrf_asformer
+# import models.my_asrf_asformer
+
+from datasets.rarp import create_dataframes, RARPDataset, collate_fn
+
+# create_dataframes,RARPDataset,collate_fn
 import random
 
 from torch.utils.data import DataLoader
