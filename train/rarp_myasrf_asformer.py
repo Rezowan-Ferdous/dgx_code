@@ -7,7 +7,7 @@ import random
 
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
-from models import asrf
+from models import mymodel
 from utils.train_utils import train,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
 from train.config import Config
 from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
@@ -98,19 +98,185 @@ from models.my_asrf_asformer import Trainer
 num_epochs = 120
 
 lr = 0.0005
-num_layers = 11
+num_layers = 10
 num_f_maps = 64
 features_dim = 2048
 bz = 1
 
 channel_mask_rate = 0.3
-# if args.action == "train":
-batch_gen = RARPBatchGenerator(dataframes,num_classes, actions_dict, sample_rate)
-# batch_gen.read_data(vid_list_file)
-# batch_gen_tst = BatchGenerator(num_classes, actions_dict, gt_path, features_path, sample_rate)
-# batch_gen_tst.read_data(vid_list_file_tst)
-batch_gen_test= RARPBatchGenerator(test_dataframe,num_classes, actions_dict, sample_rate)
+# # if args.action == "train":
+# batch_gen = RARPBatchGenerator(dataframes,num_classes, actions_dict, sample_rate)
+# # batch_gen.read_data(vid_list_file)
+# # batch_gen_tst = BatchGenerator(num_classes, actions_dict, gt_path, features_path, sample_rate)
+# # batch_gen_tst.read_data(vid_list_file_tst)
+# batch_gen_test= RARPBatchGenerator(test_dataframe,num_classes, actions_dict, sample_rate)
+#
+#
+# trainer = Trainer(num_layers, 2, 2, num_f_maps, features_dim, num_classes, channel_mask_rate)
+# trainer.train(model_dir, batch_gen, num_epochs, bz, lr,batch_gen_test)
+
+model = models.mymodel.MyAsformer(num_decoders=3,num_layers=num_layers,num_f_maps=num_f_maps,input_dim=features_dim,num_classes=num_classes,channel_masking_rate=0.3,device=device)
+
+optimizer = get_optimizer(config.optimizer,
+        model,
+        config.learning_rate,
+        momentum=config.momentum,
+        dampening=config.dampening,
+        weight_decay=config.weight_decay,
+        nesterov=config.nesterov,
+    )
+
+# resume if you want
+columns = ["epoch", "lr", "train_loss"]
+
+import pandas as pd
+# if you do validation to determine hyperparams
+if config.param_search:
+    columns += ["val_loss", "cls_acc", "edit"]
+    columns += [
+        "segment f1s@{}".format(config.iou_thresholds[i])
+        for i in range(len(config.iou_thresholds))
+    ]
+    columns += ["bound_acc", "precision", "recall", "bound_f1s"]
+
+begin_epoch = 0
+best_loss = float("inf")
+log = pd.DataFrame(columns=columns)
+
+result_path = os.path.exists(results_dir)
+if config.resume:
+    if os.path.exists(os.path.join(result_path, "checkpoint.pth")):
+        checkpoint = resume(result_path, model, optimizer)
+        begin_epoch, model, optimizer, best_loss = checkpoint
+        log = pd.read_csv(os.path.join(result_path, "log.csv"))
+        print("training will start from {} epoch".format(begin_epoch))
+    else:
+        print("there is no checkpoint at the result folder")
 
 
-trainer = Trainer(num_layers, 2, 2, num_f_maps, features_dim, num_classes, channel_mask_rate)
-trainer.train(model_dir, batch_gen, num_epochs, bz, lr,batch_gen_test)
+# criterion for loss
+if config.class_weight:
+    class_weight,boundary_weight = get_class_weight(
+        num_classes,
+        train_dataframe,
+    )
+    class_weight = class_weight.to(device)
+else:
+    class_weight = None
+
+criterion_cls = ActionSegmentationLoss(
+        ce=config.ce,
+        focal=config.focal,
+        tmse=config.tmse,
+        gstmse=config.gstmse,
+        weight=class_weight,
+        ignore_index=255,
+        ce_weight=config.ce_weight,
+        focal_weight=config.focal_weight,
+        tmse_weight=config.tmse_weight,
+        gstmse_weight=config.gstmse,
+    )
+
+criterion_bound = BoundaryRegressionLoss(pos_weight=boundary_weight)
+
+# train and validate model
+print("---------- Start training ----------")
+
+for epoch in range(begin_epoch, config.max_epoch):
+    # training
+    train_loss = train(
+        train_loader,
+        model,
+        criterion_cls,
+        criterion_bound,
+        config.lambda_b,
+        optimizer,
+        epoch,
+        device,
+    )
+ # if you do validation to determine hyperparams
+    if config.param_search:
+        (
+            val_loss,
+            cls_acc,
+            edit_score,
+            segment_f1s,
+            bound_acc,
+            precision,
+            recall,
+            bound_f1s,
+        ) = validate(
+            val_loader,
+            model,
+            criterion_cls,
+            criterion_bound,
+            config.lambda_b,
+            device,
+            config.dataset,
+            config.dataset_dir,
+            config.iou_thresholds,
+            config.boundary_th,
+            config.tolerance,
+        )
+
+        # save a model if top1 acc is higher than ever
+        if best_loss > val_loss:
+            best_loss = val_loss
+            torch.save(
+                model.state_dict(),
+                os.path.join(result_path, "best_loss_model.prm"),
+            )
+
+    # save checkpoint every epoch
+    save_checkpoint(result_path, epoch, model, optimizer, best_loss)
+
+    # write logs to dataframe and csv file
+    tmp = [epoch, optimizer.param_groups[0]["lr"], train_loss]
+
+    # if you do validation to determine hyperparams
+    if config.param_search:
+        tmp += [
+            val_loss,
+            cls_acc,
+            edit_score,
+        ]
+        tmp += segment_f1s
+        tmp += [
+            bound_acc,
+            precision,
+            recall,
+            bound_f1s,
+        ]
+
+    tmp_df = pd.Series(tmp, index=log.columns)
+
+    log = log.append(tmp_df, ignore_index=True)
+    log.to_csv(os.path.join(result_path, "log.csv"), index=False)
+
+    if config.param_search:
+        # if you do validation to determine hyperparams
+        print(
+            "epoch: {}\tlr: {:.4f}\ttrain loss: {:.4f}\tval loss: {:.4f}\tval_acc: {:.4f}\tedit: {:.4f}".format(
+                epoch,
+                optimizer.param_groups[0]["lr"],
+                train_loss,
+                val_loss,
+                cls_acc,
+                edit_score,
+            )
+        )
+    else:
+        print(
+            "epoch: {}\tlr: {:.4f}\ttrain loss: {:.4f}".format(
+                epoch, optimizer.param_groups[0]["lr"], train_loss
+            )
+        )
+
+# delete checkpoint
+os.remove(os.path.join(result_path, "checkpoint.pth"))
+
+# save models
+torch.save(model.state_dict(), os.path.join(result_path, "final_model.prm"))
+
+print("Done!")
+

@@ -29,7 +29,8 @@ class Attention_Temporal(nn.Module):
         self.attn_drop = nn.Dropout(attn_drop)
 
     def forward(self, x, B):
-        BK, T, C = x.shape
+        x= x.permute(0,2,1)
+        BK,T,C = x.shape
         t1 = T // 4
         t2 = T // 2
         x_4 = x[:, T - t1:, ]

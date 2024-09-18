@@ -528,64 +528,6 @@ class DropPath(nn.Module):
         return "p={}".format(self.drop_prob)
 
 
-class MyActionSegmentationRefinement(nn.Module):
-    def __init__(
-            self,
-            in_channel: int,
-            n_features: int,
-            n_classes: int,
-            n_stages: int,
-            n_layers: int,
-            channel_masking_rate:float,
-            n_heads,
-            mlp_ratio=4.0,
-            qkv_bias=False,
-            qk_scale=None,
-            drop=0.0,
-            attn_drop=0.0,
-            drop_path=0.2,
-            act_layer=nn.GELU,
-            norm_layer=nn.LayerNorm,
-            n_stages_asb: Optional[int] = None,
-            n_stages_brb: Optional[int] = None,
-            **kwargs: Any
-    ) -> None:
-        super().__init__()
-        # self.norm1 = norm_layer(dim)
-        # self.attn = Attention_Spatial(
-        #     dim,
-        #     num_heads=num_heads,
-        #     qkv_bias=qkv_bias,
-        #     qk_scale=qk_scale,
-        #     attn_drop=attn_drop,
-        #     proj_drop=drop,
-        # )
-
-        ## Temporal Attention Parameters
-        self.temporal_norm1 = norm_layer(n_features)
-        self.temporal_attn = Attention_Temporal(
-            n_features,
-            num_heads=n_heads,
-            qkv_bias=qkv_bias,
-            qk_scale=qk_scale,
-            attn_drop=attn_drop,
-            proj_drop=drop,
-        )
-        self.temporal_fc = nn.Linear(n_features, n_features)
-
-        ## drop path
-        self.drop_path = DropPath(drop_path) if drop_path > 0.0 else nn.Identity()
-        self.norm2 = norm_layer(n_features)
-        mlp_hidden_dim = int(n_features * mlp_ratio)
-        self.mlp = Mlp(
-            in_features=n_features,
-            hidden_features=mlp_hidden_dim,
-            act_layer=act_layer,
-            drop=drop,
-        )
-        self.model = MyTransformer(3, n_layers, 2, 2, n_features, in_channel, n_classes, channel_masking_rate)
-        self.num_classes = n_classes
-
 
 
 import numpy as np

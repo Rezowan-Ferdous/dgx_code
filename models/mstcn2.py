@@ -68,7 +68,7 @@ class Prediction_Generation(nn.Module):
 
         out = self.conv_out(f)
 
-        return out
+        return out,f
 
 
 class Refinement(nn.Module):
