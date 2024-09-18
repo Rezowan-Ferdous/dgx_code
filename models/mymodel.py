@@ -119,6 +119,7 @@ class MyAsformer(nn.Module):
                     alpha=exponential_descrease(s))) for s in range(num_decoders)])  # num_decoders
 
     def forward(self, x, mask):
+        mask= mask.unsqueeze(1)
         out, feature = self.encoder(x, mask)
         outputs = out.unsqueeze(0)
 
