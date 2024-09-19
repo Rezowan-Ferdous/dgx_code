@@ -253,7 +253,7 @@ class BoundaryRegressionLoss(nn.Module):
             masks: torch.bool (N, 1, T).
         """
         loss = 0.0
-        print('pred shape gt shape ',preds.shape,gts.shape,masks.shape)
+        # print('pred shape gt shape ',preds.shape,gts.shape,masks.shape)
         batch_size = float(preds.shape[0])
 
         for criterion in self.criterions:
@@ -264,13 +264,13 @@ class BoundaryRegressionLoss(nn.Module):
                 gt= gt.unsqueeze(0)
                 pred= pred.unsqueeze(0)
                 mask = mask.unsqueeze(0)  # Add extra dimension for num_classes
-                print(f"mask shape {mask.shape} , pred shape {pred.shape} , gt shape {gt.shape}")
+                # print(f"mask shape {mask.shape} , pred shape {pred.shape} , gt shape {gt.shape}")
                 mask = mask.to(pred.device)
                 masked_output = pred * mask  # Apply mask to output
                 masked_target = gt * mask
                 masked_target = masked_target.long()
-                print(f"Prediction shape (after masking): {masked_output.shape}")
-                print(f"Ground truth shape (after masking): {masked_target.shape}")
+                # print(f"Prediction shape (after masking): {masked_output.shape}")
+                # print(f"Ground truth shape (after masking): {masked_target.shape}")
 
                 # Compute the loss on the masked values
                 loss += criterion(masked_output, masked_target)

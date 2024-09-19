@@ -25,11 +25,11 @@ from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
 config= Config()
 
 
-sample_rate = 3
+sample_rate = 2
 actions_dict={0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7}
 num_classes = len(actions_dict)
-model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/mymodel"
-results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/mymodel"
+model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/mymodel/myasformer"
+results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/mymodel/myasformer"
 root_folder= "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/"
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
@@ -55,7 +55,7 @@ test_dataframe = create_dataframes(base_test_dir,video_filename,feature_filename
 batch_size=1
 
 train_data = RARPDataset(
-        train_dataframe[40:],
+        train_dataframe,
         root_folder,
         num_classes,
         actions_dict,
@@ -73,7 +73,7 @@ train_loader = DataLoader(
     )
 
 test_data = RARPDataset(
-        test_dataframe[:3],
+        test_dataframe,
         root_folder,
         num_classes,
         actions_dict,
@@ -100,8 +100,9 @@ if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs!")
     model = torch.nn.DataParallel(model)
 
+print('Model Size: ', sum(p.numel() for p in model.parameters()))
 # model= torch.nn.DataParallel(model)
-optimizer= get_optimizer(config.optimizer,
+optimizer = get_optimizer(config.optimizer,
         model,
         config.learning_rate,
         momentum=config.momentum,

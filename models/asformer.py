@@ -441,10 +441,10 @@ class Trainer:
                 for i in range(len(predictions)):
                     confidence, predicted = torch.max(F.softmax(predictions[i], dim=1).data, 1)
                     confidence, predicted = confidence.squeeze(), predicted.squeeze()
-                    print('confidence, predicted', confidence, predicted)
+                    # print('confidence, predicted', confidence, predicted)
                     batch_target = batch_target.squeeze()
                     confidence, predicted = confidence.squeeze(), predicted.squeeze()
-                    print('result dir ', results_dir)
+                    # print('result dir ', results_dir)
                     segment_bars_with_confidence(results_dir + '/{}_stage{}.png'.format(vid, i),
                                                  confidence.tolist(),
                                                  batch_target.tolist(), predicted.tolist())

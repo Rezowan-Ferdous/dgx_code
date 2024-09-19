@@ -45,7 +45,7 @@ def train_ef(
         mask = sample["mask"].to(device)
 
         batch_size = x.shape[0]
-        print(f" x shape {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
+        # print(f" x shape {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
 
         # Use mixed precision autocasting
         with autocast():
@@ -127,7 +127,7 @@ def train(
         b = b.to(device)
 
         batch_size= x.shape[0]
-        print(f" x shpe {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
+        # print(f" x shpe {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
         output_cls,output_bound= model(x, mask)
 
         loss = 0.0
@@ -145,7 +145,7 @@ def train(
         elif isinstance(output_cls, list):
             n =len(output_cls)
             for out in output_cls:
-                print('output ', out.shape)
+                # print('output ', out.shape)
                 loss+=criterion_cls(out,t,x)/n
 
         else:
@@ -154,7 +154,7 @@ def train(
         if isinstance(output_bound,list):
             n= len(output_bound)
             for out in output_bound:
-                print('output ',out.shape)
+                # print('output ',out.shape)
                 loss+=lambda_bound_loss * criterion_bound(out,b,mask)/n
         else:
             loss+=lambda_bound_loss*criterion_bound(output_bound,b,mask)

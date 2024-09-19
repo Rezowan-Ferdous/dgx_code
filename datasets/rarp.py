@@ -312,7 +312,7 @@ def collate_fn(sample: List[Dict[str, Any]]) -> Dict[str, Any]:
     # generate masks which shows valid length for each video (N, 1, T)
     masks = [[1 if i < length else 0 for i in range(max_length)] for length in length_list]
     masks = torch.tensor(masks, dtype=torch.bool)
-    print("mask , feature labesl and boundary shape for training ",masks.shape, features.shape,labels.shape,boundaries.shape)
+    # print("mask , feature labesl and boundary shape for training ",masks.shape, features.shape,labels.shape,boundaries.shape)
 
     return {
         "feature": features,
