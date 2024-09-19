@@ -287,7 +287,7 @@ class Encoder(nn.Module):
             x = self.dropout(x)
             x = x.squeeze(2)
 
-        feature = self.PG(x)
+        o , feature = self.PG(x)
         for layer in self.layers:
             feature = layer(feature, None, mask)
 

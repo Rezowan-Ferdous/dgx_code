@@ -37,7 +37,7 @@
     "Python.mymodel.executor": "Run",
     "Python.rarp.executor": "Run",
     "Python.rarp_myasrf_asformer.executor": "Debug",
-    "Python.rarp_train.executor": "Debug",
+    "Python.rarp_train.executor": "Run",
     "Python.train_utils.executor": "Debug",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "last_opened_file_path": "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/clean_code_dgx"
@@ -147,11 +147,6 @@
           <url>file://$PROJECT_DIR$/utils/train_utils.py</url>
           <line>51</line>
           <option name="timeStamp" value="44" />
-        </line-breakpoint>
-        <line-breakpoint enabled="true" suspend="THREAD" type="python-line">
-          <url>file://$PROJECT_DIR$/train/rarp_train.py</url>
-          <line>181</line>
-          <option name="timeStamp" value="45" />
         </line-breakpoint>
       </breakpoints>
       <default-breakpoints>

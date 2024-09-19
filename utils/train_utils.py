@@ -111,7 +111,7 @@ def train(
         optimizer,
         epoch: int,
         device: str,
-        mode="ss"):
+        mode="ss",test_loader=None):
     losses = AverageMeter("Loss",":.4e")
     model = model.to(device)
     mse = nn.MSELoss(reduction='none')
@@ -165,6 +165,22 @@ def train(
         loss.backward()
         optimizer.step()
 
+        correct= 0
+        total=0
+        if mode=="ms":
+            _, predicted = torch.max(output_cls.data[-1], 1)
+            mask=mask.unsqueeze(1).to(device)
+            predicted = predicted.to(device)
+
+            correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            total += torch.sum(mask[:, 0, :]).item()
+            print("[epoch %d]: epoch loss = %f,   acc = %f" % (epoch + 1, losses.avg,
+                                                               float(correct) / total))
+
+            if (epoch + 1) % 10 == 0 and test_loader is not None:
+                test(model, test_loader, epoch,device)
+                # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
+                # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
 
     return losses.avg
 

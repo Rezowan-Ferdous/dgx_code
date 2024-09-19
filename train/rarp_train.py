@@ -169,17 +169,7 @@ print("---------- Start training ----------")
 
 for epoch in range(begin_epoch, config.max_epoch):
     # training
-    # train_loss = train(
-    #     train_loader,
-    #     model,
-    #     criterion_cls,
-    #     criterion_bound,
-    #     config.lambda_b,
-    #     optimizer,
-    #     epoch,
-    #     device, mode="ms"
-    # )
-    train_loss = train_ef(
+    train_loss = train(
         train_loader,
         model,
         criterion_cls,
@@ -189,6 +179,16 @@ for epoch in range(begin_epoch, config.max_epoch):
         epoch,
         device, mode="ms",test_loader=val_loader
     )
+    # train_loss = train_ef(
+    #     train_loader,
+    #     model,
+    #     criterion_cls,
+    #     criterion_bound,
+    #     config.lambda_b,
+    #     optimizer,
+    #     epoch,
+    #     device, mode="ms",test_loader=val_loader
+    # )
  # if you do validation to determine hyperparams
     if config.param_search:
         (
@@ -245,7 +245,8 @@ for epoch in range(begin_epoch, config.max_epoch):
 
     tmp_df = pd.Series(tmp, index=log.columns)
 
-    log = log.append(tmp_df, ignore_index=True)
+    # Use pd.concat instead of append
+    log = pd.concat([log, tmp_df.to_frame().T], ignore_index=True)
     log.to_csv(os.path.join(result_path, "log.csv"), index=False)
 
     if config.param_search:
