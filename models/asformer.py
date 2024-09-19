@@ -7,6 +7,8 @@ import copy
 import numpy as np
 import math
 
+import models.mstcn2
+
 # from eval import segment_bars_with_confidence
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -145,7 +147,7 @@ class AttLayer(nn.Module):
             k = torch.cat([k, torch.zeros((m_batchsize, c2, self.bl - L % self.bl)).to(device)], dim=-1)
             v = torch.cat([v, torch.zeros((m_batchsize, c3, self.bl - L % self.bl)).to(device)], dim=-1)
             nb += 1
-        padding_mask = torch.cat([torch.ones((m_batchsize, 1, L)).to(device) * mask[:, 0:1, :],
+        padding_mask = torch.cat([torch.ones((m_batchsize, 1, L)).to(device) * mask[:, 0:1, :].to(device),
                                   torch.zeros((m_batchsize, 1, self.bl * nb - L)).to(device)], dim=-1)
 
         # sliding window approach, by splitting query_proj and key_proj into shape (c1, l) x (c1, 2l)
@@ -176,7 +178,7 @@ class AttLayer(nn.Module):
 
         output = output.reshape(m_batchsize, nb, -1, self.bl).permute(0, 2, 1, 3).reshape(m_batchsize, -1, nb * self.bl)
         output = output[:, :, 0:L]
-        return output * mask[:, 0:1, :]
+        return output * mask[:, 0:1, :].to(device)
 
 
 class MultiHeadAttLayer(nn.Module):
@@ -193,7 +195,6 @@ class MultiHeadAttLayer(nn.Module):
         out = self.conv_out(self.dropout(out))
         return out
 
-
 class ConvFeedForward(nn.Module):
     def __init__(self, dilation, in_channels, out_channels):
         super(ConvFeedForward, self).__init__()
@@ -204,7 +205,6 @@ class ConvFeedForward(nn.Module):
 
     def forward(self, x):
         return self.layer(x)
-
 
 class FCFeedForward(nn.Module):
     def __init__(self, in_channels, out_channels):
@@ -219,14 +219,14 @@ class FCFeedForward(nn.Module):
     def forward(self, x):
         return self.layer(x)
 
-
 class AttModule(nn.Module):
     def __init__(self, dilation, in_channels, out_channels, r1, r2, att_type, stage, alpha):
         super(AttModule, self).__init__()
         self.feed_forward = ConvFeedForward(dilation, in_channels, out_channels)
         self.instance_norm = nn.InstanceNorm1d(in_channels, track_running_stats=False)
-        self.att_layer = AttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation, att_type=att_type,
-                                  stage=stage)  # dilation
+        # self.att_layer = AttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation, att_type=att_type,
+        #                           stage=stage)  # dilation
+        self.att_layer = MultiHeadAttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation,stage=stage, att_type=att_type,num_head=4)  # dilation
         self.conv_1x1 = nn.Conv1d(out_channels, out_channels, 1)
         self.dropout = nn.Dropout()
         self.alpha = alpha
@@ -236,7 +236,7 @@ class AttModule(nn.Module):
         out = self.alpha * self.att_layer(self.instance_norm(out), f, mask) + out
         out = self.conv_1x1(out)
         out = self.dropout(out)
-        return (x + out) * mask[:, 0:1, :]
+        return (x + out) * mask[:, 0:1, :].to(device)
 
 
 class PositionalEncoding(nn.Module):
@@ -259,11 +259,13 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:, :, 0:x.shape[2]]
 
-
+from models.mstcn2 import Prediction_Generation
 class Encoder(nn.Module):
     def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate, att_type, alpha):
         super(Encoder, self).__init__()
-        self.conv_1x1 = nn.Conv1d(input_dim, num_f_maps, 1)  # fc layer
+        # self.conv_1x1 =  #nn.Conv1d(input_dim, num_f_maps, 1)  # fc layer
+        self.PG = Prediction_Generation(num_layers=num_layers, num_f_maps=num_f_maps, dim=input_dim,
+                                        num_classes=num_classes)
         self.layers = nn.ModuleList(
             [AttModule(2 ** i, num_f_maps, num_f_maps, r1, r2, att_type, 'encoder', alpha) for i in  # 2**i
              range(num_layers)])
@@ -285,11 +287,11 @@ class Encoder(nn.Module):
             x = self.dropout(x)
             x = x.squeeze(2)
 
-        feature = self.conv_1x1(x)
+        feature = self.PG(x)
         for layer in self.layers:
             feature = layer(feature, None, mask)
 
-        out = self.conv_out(feature) * mask[:, 0:1, :]
+        out = self.conv_out(feature) * mask[:, 0:1, :].to(device)
 
         return out, feature
 
@@ -321,16 +323,17 @@ class MyTransformer(nn.Module):
         self.decoders = nn.ModuleList([copy.deepcopy(
             Decoder(num_layers, r1, r2, num_f_maps, num_classes, num_classes, att_type='sliding_att',
                     alpha=exponential_descrease(s))) for s in range(num_decoders)])  # num_decoders
-
+        self.conv_bound = nn.Conv1d(num_f_maps, 3, 1)
     def forward(self, x, mask):
+        mask=mask.unsqueeze(1).to(device)
         out, feature = self.encoder(x, mask)
         outputs = out.unsqueeze(0)
 
         for decoder in self.decoders:
             out, feature = decoder(F.softmax(out, dim=1) * mask[:, 0:1, :], feature * mask[:, 0:1, :], mask)
             outputs = torch.cat((outputs, out.unsqueeze(0)), dim=0)
-
-        return outputs
+        bounds = self.conv_bound(feature)
+        return outputs,bounds
 
 
 class Trainer:

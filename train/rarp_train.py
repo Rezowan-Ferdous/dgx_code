@@ -1,25 +1,16 @@
-import os
+
 import torch
 import sys
-
-import sys
 import os
 
-# Print the Python path for debugging
-print("Python path:", sys.path)
-
+# print("Python path:", sys.path)
 # Add the project root directory to the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-# Print the updated Python path
-print("Updated Python path:", sys.path)
 
-# Now import from the datasets package
-from datasets.rarp import create_dataframes, RARPDataset, collate_fn
-
-from models import asformer,asrf,my_asrf_asformer
+from models import asformer,asrf,my_asrf_asformer, mymodel
 # import models.my_asrf_asformer
-
+import torch.nn.functional as F
 from datasets.rarp import create_dataframes, RARPDataset, collate_fn
 
 # create_dataframes,RARPDataset,collate_fn
@@ -28,17 +19,17 @@ import random
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from models import asrf
-from utils.train_utils import train,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
+from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
 from train.config import Config
 from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
 config= Config()
 
 
-sample_rate = 1
+sample_rate = 3
 actions_dict={0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7}
 num_classes = len(actions_dict)
-model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/Trx"
-results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/Trx"
+model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/mymodel"
+results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/mymodel"
 root_folder= "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/"
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
@@ -53,7 +44,7 @@ base_test_dir= '/home/ubuntu/Dropbox/Datasets/RARP_datasets/rarp_test_u'
 # cpu or cuda
 device = "cuda" if torch.cuda.is_available() else "cpu"
 if device == "cuda":
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.benchmark = True  # Optimizes performance for your GPU
 
 # create dataframe
 # =================================================================
@@ -62,22 +53,23 @@ test_dataframe = create_dataframes(base_test_dir,video_filename,feature_filename
 # print('train df ',train_dataframe)
 # print('test df ',test_dataframe)
 batch_size=1
-num_workers=0
+
 train_data = RARPDataset(
         train_dataframe[40:],
         root_folder,
         num_classes,
         actions_dict,
-        sample_rate=1,
+        sample_rate=sample_rate,
     )
 
 train_loader = DataLoader(
         train_data,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=config.num_workers,
         drop_last=True if batch_size > 1 else False,
         collate_fn=collate_fn,
+        pin_memory=True
     )
 
 test_data = RARPDataset(
@@ -85,22 +77,30 @@ test_data = RARPDataset(
         root_folder,
         num_classes,
         actions_dict,
-        sample_rate=1,
+        sample_rate=sample_rate,
     )
 
 val_loader = DataLoader(
         test_data,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=config.num_workers,
         drop_last=True if batch_size > 1 else False,
         collate_fn=collate_fn,
+        pin_memory=True
     )
+channel_masking_rate=0.3
 
 # model = models.asrf.ActionSegmentRefinementFramework(
 #     in_channel=2048,n_features=64,n_classes=num_classes,n_stages=4,n_stages_asb=4,n_stages_brb=4,n_layers=10,)
-model = models.my_asrf_asformer.MyTransformer(3,10,2,2,64,2048,num_classes,0.3,device)
+model = asformer.MyTransformer(3,config.n_layers,2,2,config.n_features,config.in_channel,num_classes,0.3)
 
+# model = mymodel.MyAsformer(3,config.n_layers,config.n_features,config.in_channel,num_classes,channel_masking_rate,device)
+if torch.cuda.device_count() > 1:
+    print(f"Using {torch.cuda.device_count()} GPUs!")
+    model = torch.nn.DataParallel(model)
+
+# model= torch.nn.DataParallel(model)
 optimizer= get_optimizer(config.optimizer,
         model,
         config.learning_rate,
@@ -127,7 +127,7 @@ begin_epoch = 0
 best_loss = float("inf")
 log = pd.DataFrame(columns=columns)
 
-result_path = os.path.exists(results_dir)
+result_path = results_dir
 if config.resume:
     if os.path.exists(os.path.join(result_path, "checkpoint.pth")):
         checkpoint = resume(result_path, model, optimizer)
@@ -154,11 +154,12 @@ criterion_cls = ActionSegmentationLoss(
         tmse=config.tmse,
         gstmse=config.gstmse,
         weight=class_weight,
-        ignore_index=255,
+        ignore_index=-100,
         ce_weight=config.ce_weight,
         focal_weight=config.focal_weight,
         tmse_weight=config.tmse_weight,
         gstmse_weight=config.gstmse,
+
     )
 
 criterion_bound = BoundaryRegressionLoss(pos_weight=boundary_weight)
@@ -168,7 +169,17 @@ print("---------- Start training ----------")
 
 for epoch in range(begin_epoch, config.max_epoch):
     # training
-    train_loss = train(
+    # train_loss = train(
+    #     train_loader,
+    #     model,
+    #     criterion_cls,
+    #     criterion_bound,
+    #     config.lambda_b,
+    #     optimizer,
+    #     epoch,
+    #     device, mode="ms"
+    # )
+    train_loss = train_ef(
         train_loader,
         model,
         criterion_cls,
@@ -176,7 +187,7 @@ for epoch in range(begin_epoch, config.max_epoch):
         config.lambda_b,
         optimizer,
         epoch,
-        device,
+        device, mode="ms",test_loader=val_loader
     )
  # if you do validation to determine hyperparams
     if config.param_search:

@@ -1,10 +1,107 @@
 import os
 from typing import Optional,Tuple
 import torch
+import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from utils.metric import AverageMeter, BoundaryScoreMeter, ScoreMeter
+from torch.cuda.amp import autocast, GradScaler
+
+scaler = GradScaler()
+
+import torch.distributed as dist
+import torch.multiprocessing as mp
+
+def setup_ddp(rank, world_size):
+    dist.init_process_group(backend='nccl', init_method='env://', rank=rank, world_size=world_size)
+
+def cleanup_ddp():
+    dist.destroy_process_group()
+
+
+def train_ef(
+        train_loader: DataLoader,
+        model,
+        criterion_cls: nn.Module,
+        criterion_bound: nn.Module,
+        lambda_bound_loss: float,
+        optimizer,
+        epoch: int,
+        device: str,
+        accumulation_steps=1,  # For gradient accumulation
+        mode="ss",test_loader=None):
+
+    losses = AverageMeter("Loss", ":.4e")
+    model = model.to(device)
+    mse = nn.MSELoss(reduction='none')
+    model.train()
+
+    optimizer.zero_grad()  # Start by zeroing the gradients
+    for i, sample in enumerate(train_loader):
+        x = sample["feature"].to(device)
+        t = sample["label"].to(device)
+        b = sample["boundary"].to(device)
+        mask = sample["mask"].to(device)
+
+        batch_size = x.shape[0]
+        print(f" x shape {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
+
+        # Use mixed precision autocasting
+        with autocast():
+            output_cls, output_bound = model(x, mask)
+            loss = 0.0
+            correct=0
+            total=0
+            # Classification loss
+            if mode == "ms":
+                for p in output_cls:
+                    loss += criterion_cls(p, t, x)
+
+
+            elif isinstance(output_cls, list):
+                n = len(output_cls)
+                for out in output_cls:
+                    loss += criterion_cls(out, t, x) / n
+            else:
+                loss += criterion_cls(output_cls, t, x)
+
+            # Boundary loss
+            if isinstance(output_bound, list):
+                n = len(output_bound)
+                for out in output_bound:
+                    loss += lambda_bound_loss * criterion_bound(out, b, mask) / n
+            else:
+                loss += lambda_bound_loss * criterion_bound(output_bound, b, mask)
+
+        # Accumulate gradients
+        loss = loss / accumulation_steps
+        scaler.scale(loss).backward()  # Scaled backpropagation with AMP
+
+        # Gradient update
+        if (i + 1) % accumulation_steps == 0:
+            scaler.step(optimizer)  # Apply the optimizer step
+            scaler.update()  # Update the scale for next iteration
+            optimizer.zero_grad()  # Zero the gradients after each step
+
+
+
+
+        losses.update(loss.item() * accumulation_steps, batch_size)  # Record the loss
+        if mode=="ms":
+            _, predicted = torch.max(output_cls.data[-1], 1)
+            correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            total += torch.sum(mask[:, 0, :]).item()
+            print("[epoch %d]: epoch loss = %f,   acc = %f" % (epoch + 1, losses.avg,
+                                                               float(correct) / total))
+
+            if (epoch + 1) % 10 == 0 and test_loader is not None:
+                test(model, test_loader, epoch,device)
+                # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
+                # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
+
+    return losses.avg
+
 def train(
         train_loader: DataLoader,
         model,
@@ -13,10 +110,13 @@ def train(
         lambda_bound_loss: float,
         optimizer,
         epoch: int,
-        device: str,):
+        device: str,
+        mode="ss"):
     losses = AverageMeter("Loss",":.4e")
     model = model.to(device)
+    mse = nn.MSELoss(reduction='none')
     model.train()
+    num_class=8
     for i, sample in enumerate(train_loader):
         x = sample["feature"]
         t = sample["label"]
@@ -31,8 +131,18 @@ def train(
         output_cls,output_bound= model(x, mask)
 
         loss = 0.0
+        batch_target=t
+        if mode=="ms":
+            for p in output_cls:
+                loss += criterion_cls(p, t, x)
+                # loss += criterion_cls(p.transpose(2, 1).contiguous().view(-1, num_class), batch_target.view(-1),x)
+                # loss += 0.15 * torch.mean(torch.clamp(
+                #     mse(F.log_softmax(p[:, :, 1:], dim=1), F.log_softmax(p.detach()[:, :, :-1], dim=1)), min=0,
+                #     max=16) * mask[:, :, 1:])
+                # epoch_loss += loss.item()
 
-        if isinstance(output_cls, list):
+
+        elif isinstance(output_cls, list):
             n =len(output_cls)
             for out in output_cls:
                 print('output ', out.shape)
@@ -54,6 +164,7 @@ def train(
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+
 
     return losses.avg
 
@@ -226,6 +337,34 @@ import numpy as np
 from utils.metric import PostProcessor
 import matplotlib.pyplot as plt
 
+
+def test(model, test_loader, epoch,device):
+    model.eval()
+    correct = 0
+    total = 0
+    if_warp = False  # When testing, always false
+    with torch.no_grad():
+        for i, sample in enumerate(test_loader):
+            x = sample["feature"]
+            t = sample["label"]
+            b = sample["boundary"]
+            mask = sample["mask"]
+            x = x.to(device)
+            t = t.to(device)
+            b = b.to(device)
+            mask=mask.to(device)
+
+            p = model(x, mask)
+            _, predicted = torch.max(p.data[-1], 1)
+            correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            total += torch.sum(mask[:, 0, :]).item()
+
+    acc = float(correct) / total
+    print("---[epoch %d]---: tst acc = %f" % (epoch + 1, acc))
+
+    model.train()
+
+
 def predict(
     loader: DataLoader,
     model: nn.Module,
@@ -307,7 +446,7 @@ def resume(
     resume_path=os.path.join(result_path,"checkpoint.pth")
     print("loading checkpoint {}".format(result_path))
 
-    checkpoint= torch.load(resume_path, map_location=lambda storage,loc:storage)
+    checkpoint = torch.load(resume_path, map_location=lambda storage,loc:storage)
     begin_epoch= checkpoint["epoch"]
     best_loss= checkpoint["best_loss"]
     model.load_state_dict(checkpoint["state_dict"])
@@ -413,3 +552,18 @@ def get_class_weight(num_class,dataframe):
 # medianb = torch.median(frequencyb)
 # pos_weight = medianb / frequencyb
 # print(pos_weight)
+
+# def main():
+#     world_size = torch.cuda.device_count()
+#     mp.spawn(train_ddp, args=(world_size, train_loader, model, criterion_cls, criterion_bound, lambda_bound_loss, optimizer, epoch, device), nprocs=world_size, join=True)
+
+
+def train_ddp(rank, world_size, train_loader, model, criterion_cls, criterion_bound, lambda_bound_loss, optimizer, epoch, device):
+    setup_ddp(rank, world_size)
+
+    model = model.to(rank)
+    model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[rank])
+
+    # Your training logic goes here
+
+    cleanup_ddp()

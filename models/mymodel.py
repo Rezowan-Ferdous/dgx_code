@@ -18,7 +18,7 @@ from train.config import Config
 config= Config()
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-num_classes= 8
+num_classes = 8
 class MySurgFormer(nn.Module):
     def __init__(self,num_classes,in_dim,embed_dim,
                  depth=12,num_heads=6,mlp_ratio= 4.0,qkv_bias=False,qk_scale=None,
@@ -49,8 +49,11 @@ class MyAttModule(nn.Module):
 
     def forward(self, x, f, mask):
         out = self.feed_forward(x)
+        # print("before attention ",out.shape)
         # out = self.alpha * self.att_layer(self.instance_norm(out), f, mask) + out
         out= self.att_layer(out,x.shape[0])
+        # print(f'att out {out.shape}')
+        out= out.permute(0,2,1)
         out = self.conv_1x1(out)
         out = self.dropout(out)
         return (x + out) * mask[:, 0:1, :]
@@ -118,16 +121,19 @@ class MyAsformer(nn.Module):
         self.decoders = nn.ModuleList([copy.deepcopy(Decoder(num_layers, num_f_maps, num_classes, num_classes,
                     alpha=exponential_descrease(s))) for s in range(num_decoders)])  # num_decoders
 
+        self.conv_bound = nn.Conv1d(num_f_maps, 3, 1)
     def forward(self, x, mask):
-        mask= mask.unsqueeze(1)
+        mask= mask.unsqueeze(1).to(device)
+
         out, feature = self.encoder(x, mask)
         outputs = out.unsqueeze(0)
 
         for decoder in self.decoders:
             out, feature = decoder(F.softmax(out, dim=1) * mask[:, 0:1, :], feature * mask[:, 0:1, :], mask)
             outputs = torch.cat((outputs, out.unsqueeze(0)), dim=0)
+        bounds = self.conv_bound(feature)
 
-        return outputs
+        return outputs,bounds
 
 
 class MyActionSegmentationRefinement(nn.Module):

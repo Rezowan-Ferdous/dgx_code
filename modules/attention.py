@@ -1,6 +1,14 @@
 import torch.nn as nn
 from einops import rearrange
+import math
 
+def custom_round(x, divisor):
+    result = x / divisor
+    fraction = result - int(result)  # Get the fractional part
+    if fraction >= 0.5:
+        return math.ceil(result)
+    else:
+        return math.floor(result)
 
 class Attention_Temporal(nn.Module):
     def __init__(
@@ -33,6 +41,7 @@ class Attention_Temporal(nn.Module):
         BK,T,C = x.shape
         t1 = T // 4
         t2 = T // 2
+
         x_4 = x[:, T - t1:, ]
         x_8 = x[:, t2:, ]
         x_16 = x
@@ -90,7 +99,22 @@ class Attention_Temporal(nn.Module):
         x_16 = rearrange(x_16, "(b k) num_heads t c -> (b k) t (num_heads c)", b=B)
 
         x_4 = self.proj_4(x_4)
-        x_8[:, t1:, :] = 0.5 * x_8[:, t1:, :] + 0.5 * x_4
+        # x_8[:, t1:, :] = 0.5 * x_8[:, t1:, :] + 0.5 * x_4
+
+        ##
+        x_8_slice = x_8[:, t1:, :]  # Slice from t1 onwards
+        x_4_slice = x_4[:, :x_8_slice.shape[1], :]  # Slice x_4 to match x_8_slice
+        # Ensure both slices have the same size by trimming the larger tensor
+        min_size = min(x_8_slice.shape[1], x_4_slice.shape[1])
+
+        x_8_slice = x_8_slice[:, :min_size, :]
+        x_4_slice = x_4_slice[:, :min_size, :]
+
+        # Now perform the addition
+        x_8[:, t1:t1 + min_size, :] = 0.5 * x_8_slice + 0.5 * x_4_slice
+        ##
+
+
         x_8 = self.proj_8(x_8)
         x_16[:, t2:, :] = 0.5 * x_16[:, t2:, :] + 0.5 * x_8
         x_16 = self.proj_drop(self.proj_16(x_16))

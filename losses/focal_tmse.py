@@ -102,8 +102,11 @@ class GaussianSimilarityTMSE(nn.Module):
         total_loss = 0.0
         batch_size = preds.shape[0]
         for pred, gt, sim in zip(preds, gts, sim_index):
-            pred = pred[:, torch.where(gt != self.ignore_index)[0]]
-            sim = sim[:, torch.where(gt != self.ignore_index)[0]]
+            valid_indices = torch.where(gt != self.ignore_index)[0]
+            # pred = pred[:, torch.where(gt != self.ignore_index)[0]]
+            # sim = sim[:, torch.where(gt != self.ignore_index)[0]]
+            pred = pred[:, valid_indices]
+            sim = sim[:, valid_indices]
 
             # calculate gaussian similarity
             diff = sim[:, 1:] - sim[:, :-1]
@@ -191,11 +194,15 @@ class ActionSegmentationLoss(nn.Module):
         loss = 0.0
         for criterion, weight in zip(self.criterions, self.weights):
             if isinstance(criterion, GaussianSimilarityTMSE):
+                if sim_index is None:
+                    raise ValueError("sim_index must be provided for GaussianSimilarityTMSE")
                 loss += weight * criterion(preds, gts, sim_index)
             else:
                 loss += weight * criterion(preds, gts)
 
         return loss
+
+
 
 
 class BoundaryRegressionLoss(nn.Module):
