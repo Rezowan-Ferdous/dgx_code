@@ -2,9 +2,9 @@
 from typing import Any, Dict, Tuple
 class Config:
     model: str = "RarpDataset"
-    n_layers: int = 10
-    n_stages: int = 4  # for ms-tcn
-    n_features: int = 128
+    n_layers: int = 2
+    n_stages: int = 2  # for ms-tcn
+    n_features: int = 256
     n_stages_asb: int = 4
     n_stages_brb: int = 4
 

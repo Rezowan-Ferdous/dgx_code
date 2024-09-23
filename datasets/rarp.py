@@ -1,4 +1,6 @@
-import os,random
+import os,random,sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from typing import Any, Dict, List, Optional
 
 import numpy as np

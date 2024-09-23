@@ -5,8 +5,11 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from utils.metric import AverageMeter, BoundaryScoreMeter, ScoreMeter
-from torch.cuda.amp import autocast, GradScaler
+from .metric  import AverageMeter, BoundaryScoreMeter, ScoreMeter
+
+# from torch.cuda.amp import autocast, GradScaler
+
+from torch.amp import autocast, GradScaler
 
 scaler = GradScaler()
 
@@ -48,16 +51,19 @@ def train_ef(
         # print(f" x shape {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
 
         # Use mixed precision autocasting
-        with autocast():
+        with autocast(device_type='cuda'):
             output_cls, output_bound = model(x, mask)
             loss = 0.0
-            correct=0
-            total=0
+
             # Classification loss
             if mode == "ms":
+                msloss=0.0
                 for p in output_cls:
-                    loss += criterion_cls(p, t, x)
+                    msloss += criterion_cls(p, t, x)
+                print(f'msloss {msloss}, output shape {output_cls.shape[0]}')
+                msloss=msloss/output_cls.shape[0]
 
+                loss+=msloss
 
             elif isinstance(output_cls, list):
                 n = len(output_cls)
@@ -88,17 +94,22 @@ def train_ef(
 
 
         losses.update(loss.item() * accumulation_steps, batch_size)  # Record the loss
-        if mode=="ms":
+        correct = 0
+        total = 0
+        if mode == "ms":
             _, predicted = torch.max(output_cls.data[-1], 1)
+            mask = mask.unsqueeze(1).to(device)
+            predicted = predicted.to(device)
+
             correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
             total += torch.sum(mask[:, 0, :]).item()
             print("[epoch %d]: epoch loss = %f,   acc = %f" % (epoch + 1, losses.avg,
                                                                float(correct) / total))
 
-            if (epoch + 1) % 10 == 0 and test_loader is not None:
-                test(model, test_loader, epoch,device)
-                # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
-                # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
+        if (epoch + 1) % 2 == 0 and test_loader is not None:
+            test(model, test_loader, epoch, device)
+            # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
+            # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
 
     return losses.avg
 
@@ -177,7 +188,7 @@ def train(
             print("[epoch %d]: epoch loss = %f,   acc = %f" % (epoch + 1, losses.avg,
                                                                float(correct) / total))
 
-            if (epoch + 1) % 10 == 0 and test_loader is not None:
+            if (epoch + 1) % 2 == 0 and test_loader is not None:
                 test(model, test_loader, epoch,device)
                 # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
                 # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
@@ -350,7 +361,7 @@ def evaluate(
     )
 
 import numpy as np
-from utils.metric import PostProcessor
+from .metric import PostProcessor
 import matplotlib.pyplot as plt
 
 
@@ -370,10 +381,19 @@ def test(model, test_loader, epoch,device):
             b = b.to(device)
             mask=mask.to(device)
 
-            p = model(x, mask)
-            _, predicted = torch.max(p.data[-1], 1)
-            correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
-            total += torch.sum(mask[:, 0, :]).item()
+            p,pb = model(x, mask)
+            _, predicted = torch.max(p[-1], 1)
+            # correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            # total += torch.sum(mask[:, 0, :]).item()
+
+            # Adjust indexing based on mask's shape
+            if len(mask.shape) == 2:
+                correct += ((predicted == t).float() * mask).sum().item()  # Adjust for 2D mask
+                total += torch.sum(mask[:, :]).item()
+            elif len(mask.shape) == 3:
+                correct += ((predicted == t).float() * mask[:, 0, :].squeeze(
+                    1)).sum().item()  # Original indexing for 3D mask
+                total += torch.sum(mask[:, 0, :]).item()
 
     acc = float(correct) / total
     print("---[epoch %d]---: tst acc = %f" % (epoch + 1, acc))

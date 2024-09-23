@@ -3,25 +3,15 @@ import torch
 import sys
 import os
 
-# Add the parent directory to the system path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Now you can safely imp import create_dataframes, RARPDataset, collate_fn
-# from pathlib import Path
-# sys.path.append(r'\home\ubuntu\Dropbox\Rezowan_codebase\dgx_code\clean_code_dgx')
-# print("Python path:", sys.path)
-# Add the project root directory to the Python path
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# f=Path(__file__).parents[1]
-# print(f)
-# sys.path.append(os.path.abspath(Path(__file__).parents[1]))
+#
+# export PYTHONPATH=/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code
 
 from models import asformer,asrf,my_asrf_asformer, mymodel
 # import models.my_asrf_asformer
 import torch.nn.functional as F
 
 
-from ..datasets.rarp  import create_dataframes, RARPDataset, collate_fn
+from datasets.rarp import create_dataframes, RARPDataset, collate_fn
 
 # create_dataframes,RARPDataset,collate_fn
 import random
@@ -180,7 +170,7 @@ print("---------- Start training ----------")
 
 for epoch in range(begin_epoch, config.max_epoch):
     # training
-    train_loss = train(
+    train_loss = train_ef(
         train_loader,
         model,
         criterion_cls,

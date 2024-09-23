@@ -258,9 +258,7 @@ class BoundaryRegressionLoss(nn.Module):
 
         for criterion in self.criterions:
             for pred, gt, mask in zip(preds, gts, masks):
-                print('mask',mask.shape)
-                print('gt',gt.shape)
-                print('pred',pred.shape)
+
                 gt= gt.unsqueeze(0)
                 pred= pred.unsqueeze(0)
                 mask = mask.unsqueeze(0)  # Add extra dimension for num_classes
