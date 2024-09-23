@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import math
 
-import models.mstcn2
+import mstcn2
 
 # from eval import segment_bars_with_confidence
 
@@ -259,7 +259,7 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         return x + self.pe[:, :, 0:x.shape[2]]
 
-from models.mstcn2 import Prediction_Generation
+from mstcn2 import Prediction_Generation
 class Encoder(nn.Module):
     def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate, att_type, alpha):
         super(Encoder, self).__init__()

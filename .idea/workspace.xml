@@ -5,16 +5,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="6e439696-0cca-4587-a2f0-18bdafda9a63" name="Changes" comment="maks error fixed">
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/rarp_train.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/clean_code_dgx.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/clean_code_dgx.iml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datasets/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/datasets/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/datasets/rarp.py" beforeDir="false" afterPath="$PROJECT_DIR$/datasets/rarp.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/losses/focal_tmse.py" beforeDir="false" afterPath="$PROJECT_DIR$/losses/focal_tmse.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/models/asformer.py" beforeDir="false" afterPath="$PROJECT_DIR$/models/asformer.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/train/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/train/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/train/rarp_train.py" beforeDir="false" afterPath="$PROJECT_DIR$/train/rarp_train.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/train_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/train_utils.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />

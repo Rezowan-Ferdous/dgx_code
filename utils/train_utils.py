@@ -32,7 +32,7 @@ def train_ef(
         optimizer,
         epoch: int,
         device: str,
-        accumulation_steps=1,  # For gradient accumulation
+        accumulation_steps=4,  # For gradient accumulation
         mode="ss",test_loader=None):
 
     losses = AverageMeter("Loss", ":.4e")
