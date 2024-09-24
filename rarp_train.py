@@ -6,7 +6,7 @@ import os
 #
 # export PYTHONPATH=/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code
 
-from models import asformer,asrf,my_asrf_asformer, mymodel
+from clean_code_dgx.models import asformer,asrf,my_asrf_asformer, mymodel
 # import models.my_asrf_asformer
 import torch.nn.functional as F
 
@@ -22,7 +22,7 @@ from models import asrf
 from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
 from train.config import Config
 from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
-config= Config()
+config = Config()
 
 
 sample_rate = 2
@@ -50,12 +50,14 @@ if device == "cuda":
 # =================================================================
 train_dataframe = create_dataframes(base_train_dir,video_filename,feature_filename,annot_filename)
 test_dataframe = create_dataframes(base_test_dir,video_filename,feature_filename,annot_filename)
+train_dataframe.sort_values(by='frames', ascending=True)
+test_dataframe.sort_values(by='frames', ascending=True)
 # print('train df ',train_dataframe)
 # print('test df ',test_dataframe)
 batch_size=1
 
 train_data = RARPDataset(
-        train_dataframe[:5],
+        train_dataframe,
         root_folder,
         num_classes,
         actions_dict,
@@ -93,9 +95,9 @@ channel_masking_rate=0.3
 
 # model = models.asrf.ActionSegmentRefinementFramework(
 #     in_channel=2048,n_features=64,n_classes=num_classes,n_stages=4,n_stages_asb=4,n_stages_brb=4,n_layers=10,)
-model = asformer.MyTransformer(3,config.n_layers,2,2,config.n_features,config.in_channel,num_classes,0.3)
+# model = asformer.MyTransformer(3,config.n_layers,2,2,config.n_features,config.in_channel,num_classes,0.3)
 
-# model = mymodel.MyAsformer(3,config.n_layers,config.n_features,config.in_channel,num_classes,channel_masking_rate,device)
+model = mymodel.MyAsformer(3,config.n_layers,config.n_features,config.in_channel,num_classes,channel_masking_rate,device)
 if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs!")
     model = torch.nn.DataParallel(model)

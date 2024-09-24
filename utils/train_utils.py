@@ -39,6 +39,8 @@ def train_ef(
     model = model.to(device)
     mse = nn.MSELoss(reduction='none')
     model.train()
+    total_correct = 0  # Initialize accuracy accumulator
+    total_samples = 0
 
     optimizer.zero_grad()  # Start by zeroing the gradients
     for i, sample in enumerate(train_loader):
@@ -50,6 +52,20 @@ def train_ef(
         batch_size = x.shape[0]
         # print(f" x shape {x.shape} target shape {t.shape} boundary shape {b.shape} mask shape {mask.shape}")
 
+        # Define the number of elements to sample
+
+        max_index = t.shape[1]
+        n_elements = max_index//5
+        # print(' elements ',n_elements)
+
+        indices = np.linspace(0, max_index - 1, n_elements).astype(int)
+        #
+        # # Sample the sequence, label, and mask using the generated indices
+        x = x[:, :, indices]  # Select along the time dimension
+        t = t[:, indices]  # Select along the time dimension
+        mask = mask[:, indices]  # Select along the time dimension
+        b = b[:, indices]
+
         # Use mixed precision autocasting
         with autocast(device_type='cuda'):
             output_cls, output_bound = model(x, mask)
@@ -60,10 +76,10 @@ def train_ef(
                 msloss=0.0
                 for p in output_cls:
                     msloss += criterion_cls(p, t, x)
-                print(f'msloss {msloss}, output shape {output_cls.shape[0]}')
-                msloss=msloss/output_cls.shape[0]
+                # print(f'msloss {msloss}, output shape {output_cls.shape[0]}')
+                msloss = msloss/output_cls.shape[0]
 
-                loss+=msloss
+                loss += msloss
 
             elif isinstance(output_cls, list):
                 n = len(output_cls)
@@ -94,22 +110,27 @@ def train_ef(
 
 
         losses.update(loss.item() * accumulation_steps, batch_size)  # Record the loss
-        correct = 0
-        total = 0
+        # correct = 0
+        # total = 0
         if mode == "ms":
             _, predicted = torch.max(output_cls.data[-1], 1)
             mask = mask.unsqueeze(1).to(device)
             predicted = predicted.to(device)
 
-            correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
-            total += torch.sum(mask[:, 0, :]).item()
-            print("[epoch %d]: epoch loss = %f,   acc = %f" % (epoch + 1, losses.avg,
-                                                               float(correct) / total))
+            # correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            # total += torch.sum(mask[:, 0, :]).item()
+            # Accumulate correct predictions across batches
+            total_correct += ((predicted == t).float() * mask[:, 0, :].squeeze(1)).sum().item()
+            total_samples += torch.sum(mask[:, 0, :]).item()
 
-        if (epoch + 1) % 2 == 0 and test_loader is not None:
-            test(model, test_loader, epoch, device)
-            # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
-            # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
+    # Print once per epoch
+    accuracy = total_correct / total_samples if total_samples > 0 else 0.0
+    print(f"[epoch {epoch + 1}]: epoch loss = {losses.avg}, acc = {accuracy:.4f}")
+
+    if (epoch + 1) % 5 == 0 and test_loader is not None:
+        test(model, test_loader, epoch, device)
+        # torch.save(model.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".model")
+        # torch.save(optimizer.state_dict(), save_dir + "/epoch-" + str(epoch + 1) + ".opt")
 
     return losses.avg
 

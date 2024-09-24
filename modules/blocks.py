@@ -1,6 +1,6 @@
 import torch.nn as nn
 from timm.models.layers import drop_path, to_2tuple, trunc_normal_
-from modules.attention import Attention_Spatial,Attention_Temporal
+from clean_code_dgx.modules.attention import Attention_Spatial,Attention_Temporal
 import torch.nn as nn
 from einops import rearrange
 import torch

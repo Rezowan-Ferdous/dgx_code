@@ -7,7 +7,7 @@ import copy
 import numpy as np
 import math
 
-from clean_code_dgx.models.mstcn2 import Prediction_Generation
+from .mstcn2 import Prediction_Generation
 
 # from eval import segment_bars_with_confidence
 
@@ -180,7 +180,7 @@ class AttLayer(nn.Module):
         output = output[:, :, 0:L]
         return output * mask[:, 0:1, :].to(device)
 
-
+from clean_code_dgx.modules.attention import Attention_Temporal
 class MultiHeadAttLayer(nn.Module):
     def __init__(self, q_dim, k_dim, v_dim, r1, r2, r3, bl, stage, att_type, num_head):
         super(MultiHeadAttLayer, self).__init__()
@@ -188,10 +188,12 @@ class MultiHeadAttLayer(nn.Module):
         self.conv_out = nn.Conv1d(v_dim * num_head, v_dim, 1)
         self.layers = nn.ModuleList(
             [copy.deepcopy(AttLayer(q_dim, k_dim, v_dim, r1, r2, r3, bl, stage, att_type)) for i in range(num_head)])
+
         self.dropout = nn.Dropout(p=0.5)
 
     def forward(self, x1, x2, mask):
         out = torch.cat([layer(x1, x2, mask) for layer in self.layers], dim=1)
+
         out = self.conv_out(self.dropout(out))
         return out
 
