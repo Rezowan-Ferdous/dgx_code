@@ -35,10 +35,10 @@ class Config:
 
     optimizer: str = "Adam"
 
-    learning_rate: float = 0.0005
+    learning_rate: float = 0.00005
     momentum: float = 0.9  # momentum of SGD
     dampening: float = 0.0  # dampening for momentum of SGD
-    weight_decay: float = 0.0001  # weight decay
+    weight_decay: float = 0.00001  # weight decay
     nesterov: bool = True  # enables Nesterov momentum
 
     param_search: bool = False

@@ -4,7 +4,7 @@ import copy
 import csv
 from typing import Dict,List,Optional,Tuple
 import torch
-from utils.transforms_asrf import GaussianSmoothing
+from clean_code_dgx.utils.transforms_asrf import GaussianSmoothing
 
 def get_segments(
         frame_wise_label:np.ndarray,

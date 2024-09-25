@@ -5,11 +5,13 @@ import torch.nn.functional as F
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from .metric  import AverageMeter, BoundaryScoreMeter, ScoreMeter
+from .metric import AverageMeter, BoundaryScoreMeter, ScoreMeter
 
 # from torch.cuda.amp import autocast, GradScaler
 
 from torch.amp import autocast, GradScaler
+from torch.utils.tensorboard import SummaryWriter
+writer = SummaryWriter(log_dir="runs/experiment_name")
 
 scaler = GradScaler()
 

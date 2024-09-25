@@ -1,5 +1,5 @@
 import os,random,sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Any, Dict, List, Optional
 
@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 
-from utils.preprocess import _get_video_prop
+from clean_code_dgx.utils.preprocess import _get_video_prop
 
 def feat_annot_files(dataset_dir,video_filename,feature_filename,annot_filename):
     video_file = video_filename #'video_left.avi'

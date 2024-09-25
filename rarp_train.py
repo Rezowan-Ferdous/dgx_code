@@ -91,7 +91,7 @@ val_loader = DataLoader(
         collate_fn=collate_fn,
         pin_memory=True
     )
-channel_masking_rate=0.3
+channel_masking_rate= 0.3
 
 # model = models.asrf.ActionSegmentRefinementFramework(
 #     in_channel=2048,n_features=64,n_classes=num_classes,n_stages=4,n_stages_asb=4,n_stages_brb=4,n_layers=10,)
