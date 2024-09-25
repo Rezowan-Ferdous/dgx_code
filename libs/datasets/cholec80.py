@@ -43,103 +43,146 @@ INSTRUMENTS = [
 def get_base_name(file):
     return file.split('-timestamp')[0].split('.')[0]
 
-def make_cholecdf(cholec_root):
-    video_files = []
-    phase_annotations = []
-    tool_annotations = []
-    feature_files = []
-    num_frames = []
-    fps = []
-    videos_path = os.path.join(cholec_root, 'videos')
-    phases_path = os.path.join(cholec_root, 'phase_annotations')
-    tools_path = os.path.join(cholec_root, 'tool_annotations')
-    features_path = os.path.join(cholec_root, 'features')
+
+cholec_root = "/home/local/data/rezowan/datasets/cholec/"
+
+action_dict = {"Preparation": 0,
+               "CalotTriangleDissection": 1,
+               "ClippingCutting": 2,
+               "GallbladderDissection": 3,
+               "GallbladderRetraction": 4,
+               "CleaningCoagulation": 5,
+               "GallbladderPackaging": 6}
 
 
-    video_list = [f for f in os.listdir(videos_path) if f.endswith('.mp4')]
-    phase_list= os.listdir(phases_path)
-    tool_list= os.listdir(tools_path)
-    feature_list= os.listdir(features_path)
+def calculate_segments(phase_file, action_dict, sample_rate=1):
+    segments = []  # List to hold the segments
+    start_frame = 0  # Starting frame for the first segment
+    prev_phase = None  # Previous phase to track changes
 
-    # Match video names with the corresponding annotations and features
-    for video_file in video_list:
-        base_name = get_base_name(video_file)
+    # if dataset=="cholec":
+    with open(phase_file, "r") as f:
+        gt = f.read().split("\n")[1:-1]
+    # Total number of frames
+    num_frames = len(gt)
 
-        # Find corresponding phase annotation, tool annotation, and feature files
-        phase_file = next((f for f in phase_list if get_base_name(f) == base_name), None)
+    # Create effective frame indices based on the sample rate
+    effective_indices = np.arange(0, num_frames, sample_rate)
+    effective_length = len(effective_indices)
 
-        # Initialize variables
-        segments = []  # List to hold the segments
-        start_frame = 0  # Starting frame for the first segment
-        prev_phase = None  # Previous phase to track changes
+    # Create arrays to store ground truth phase information and boundaries
+    gt_array = np.full(effective_length, -100)
+    boundary_array = np.zeros(effective_length)
 
-        with open(phase_file, "r") as f:
-            gt = f.read().split("\n")[1:-1]
-        gt_array = np.full(len(gt), -100)
-        for i in range(len(gt)):
-            # gt_array[i] = action_dict[gt[i].split("\t")[-1]]
-            # print(gt[i], action_dict[gt[i]], gt_array[i])
-            # Get the frame and phase from the line
-            frame_data = gt[i].split("\t")
-            current_frame = int(frame_data[0])  # Frame number
-            current_phase = frame_data[-1]  # Phase name
+    for i in range(num_frames):
+        frame_data = gt[i].split("\t")
+        current_frame = int(frame_data[0])  # Frame number
+        current_phase = frame_data[-1]  # Phase name
+        if current_frame in effective_indices:
+            effective_index = np.where(effective_indices == current_frame)[0][0]
 
-            # Map the phase to its corresponding action index
+            # Process only if the current phase is in the action dictionary
             if current_phase in action_dict:
-                gt_array[i] = action_dict[current_phase]
+                gt_array[effective_index] = action_dict[current_phase]
 
                 # Track phase changes
                 if prev_phase is None:
                     # Initialize the previous phase
                     prev_phase = current_phase
-                    start_frame = current_frame  # Start segment at the first frame
+                    start_frame = effective_index  # Start segment at the first frame
+
                 elif current_phase != prev_phase:
+                    # When phase changes, record the previous phase segment
+                    end_frame = effective_index - 1
+
                     # When phase changes, record the previous phase segment
                     segments.append({
                         'start_frame': start_frame,
-                        'end_frame': current_frame - 1,
+                        'end_frame': end_frame,
                         'phase': prev_phase,
                         'action': action_dict[prev_phase]
                     })
-                    # Reset start frame and previous phase
-                    start_frame = current_frame
+
+                    # Define boundary conditions: First 5 frames as start, last 5 frames as end
+                    boundary_array[start_frame:start_frame + 5] = 1  # Start boundary
+                    boundary_array[end_frame - 4:end_frame + 1] = 2  # End boundary
+
+                    # All intermediate frames between start and end are refined (mark as 0)
+                    boundary_array[start_frame + 5:end_frame - 4] = 0
+
+                    start_frame = effective_index
                     prev_phase = current_phase
 
-            # After loop, check if there's an active segment to close
-        if prev_phase is not None:
-            segments.append({
-                'start_frame': start_frame,
-                'end_frame': current_frame,  # Last frame processed
-                'phase': prev_phase,
-                'action': action_dict[prev_phase]
-            })
+    # After the loop, handle the last active segment
+    if prev_phase is not None:
+        end_frame = effective_index
 
-        tool_file = next((f for f in tool_list if get_base_name(f) == base_name), None)
-        feature_file = next((f for f in feature_list if get_base_name(f) == base_name), None)
+        segments.append({
+            'start_frame': start_frame,
+            'end_frame': end_frame,
+            'phase': prev_phase,
+            'label': action_dict[prev_phase]
+        })
 
-        # video_prop= get_video_prop(video_file)
-        # num_frame= video_prop['num_frames']
-        # fp=video_prop['fps']
-        # num_frames.append(num_frame)
-        # fps.append(fp)
-        # Append to the lists only if all corresponding files are found
-        if phase_file and tool_file and feature_file:
-            video_files.append(os.path.join('videos', video_file))
-            phase_annotations.append(os.path.join('phase_annotations', phase_file))
-            tool_annotations.append(os.path.join('tool_annotations', tool_file))
-            feature_files.append(os.path.join('features', feature_file))
+        # Define boundary for the last segment
+        boundary_array[start_frame:start_frame + 5] = 1  # Start boundary
+        boundary_array[end_frame - 4:end_frame + 1] = 2  # End boundary
+        if end_frame - 4 >= start_frame + 5:
+            boundary_array[start_frame + 5:end_frame - 4] = 0
+
+    return segments, gt_array, boundary_array
+
+
+def create_cholec_df(cholec_root, action_dict, sample_rate=1):
+    phases_path = os.path.join(cholec_root, 'phase_annotations')
+    tools_path = os.path.join(cholec_root, 'tool_annotations')
+    features_path = os.path.join(cholec_root, 'features')
+    videos_path = os.path.join(cholec_root, 'videos')
+    # for folds in folders:
+    phase_list = os.listdir(phases_path)
+    tool_list = os.listdir(tools_path)
+    feature_list = os.listdir(features_path)
+    video_list = [f for f in os.listdir(videos_path) if f.endswith('.mp4')]
+    phase_list.sort()
+    tool_list.sort()
+    feature_list.sort()
+    video_list.sort()
+    feat_files = []
+    phase_files = []
+    tool_files = []
+    segments = []
+    labels = []
+    boundaries = []
+
+    video_files = []
+    for feat in zip(feature_list, tool_list, phase_list, video_list):
+        base_name = feat[0].split('.')[0]
+        if feat[1].startswith(base_name) and feat[2].startswith(base_name):
+            phase_file = os.path.join(phases_path, feat[2])
+            tool_file = os.path.join(phases_path, feat[1])
+            feat_file = os.path.join(phases_path, feat[0])
+            vid_file = os.path.join(phases_path, feat[3])
+            segment, gt, bound = calculate_segments(phase_file, action_dict, sample_rate=1)
+            segments.append(segment)
+            labels.append(gt)
+            boundaries.append(bound)
+            feat_files.append(feat_file)
+            phase_files.append(phase_file)
+            tool_files.append(tool_file)
+            video_files.append(vid_file)
 
     # Create a dataframe with the relevant paths
     df = pd.DataFrame({
         'video_file': video_files,
-        'phase_annotation': phase_annotations,
-        'tool_annotation': tool_annotations,
-        'feature_file': feature_files,
-        # 'num_frames':num_frames,
-        # 'fps':fps,
+        'annotation_path': phase_files,
+        'tool_annotation': tool_files,
+        'feature_path': feat_files,
+        'segments': segments,
+        'labels': labels,
+        'boundaries': boundaries,
 
     })
-    print(df.head())
     return df
 
-make_cholecdf(cholec_root)
+
+cholec_df = create_cholec_df(cholec_root, action_dict, sample_rate=1)
