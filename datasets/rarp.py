@@ -12,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 
-from clean_code_dgx.utils.preprocess import _get_video_prop
+from utils.preprocess import _get_video_prop
 
 def feat_annot_files(dataset_dir,video_filename,feature_filename,annot_filename):
     video_file = video_filename #'video_left.avi'
@@ -120,8 +120,8 @@ def create_dataframe_from_annotations(file_pairs,fps=60):
         'fps': video_prop['fps'],
         'resolution':resolution,
         'frames': video_prop['num_frames'],
-        'labels_path':save_pathl,
-         'boundaries_path': save_pathb
+        'labels':save_pathl,
+         'boundaries': save_pathb
         })
 
         np.save(save_pathl,labels)
@@ -168,7 +168,7 @@ class RARPDataset(Dataset):
         sample = {}
         row = self.df.iloc[idx % len(self.df)]
         feat_file,annot_file,label_file,boundary_file,segments,frames,vid,fps =(
-            row['feature_path'],row['annotation_path'],row['labels_path'],row['boundaries_path'],row['segments'],row['frames'],row['video_id'],row['fps'])
+            row['feature_path'],row['annotation_path'],row['labels'],row['boundaries'],row['segments'],row['frames'],row['video_id'],row['fps'])
         feature = np.load(feat_file).astype(np.float32)
         label = np.load(label_file).astype(np.int64)
         boundary = np.load(boundary_file).astype(np.float32)

@@ -7,10 +7,10 @@ import copy
 import numpy as np
 import math
 
-from .mstcn2 import Prediction_Generation
+from mstcn2 import Prediction_Generation
 
 # from eval import segment_bars_with_confidence
-
+# from clean_code_dgx.modules.attention import Attention_Temporal
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
@@ -180,7 +180,7 @@ class AttLayer(nn.Module):
         output = output[:, :, 0:L]
         return output * mask[:, 0:1, :].to(device)
 
-from clean_code_dgx.modules.attention import Attention_Temporal
+
 class MultiHeadAttLayer(nn.Module):
     def __init__(self, q_dim, k_dim, v_dim, r1, r2, r3, bl, stage, att_type, num_head):
         super(MultiHeadAttLayer, self).__init__()
@@ -222,13 +222,13 @@ class FCFeedForward(nn.Module):
         return self.layer(x)
 
 class AttModule(nn.Module):
-    def __init__(self, dilation, in_channels, out_channels, r1, r2, att_type, stage, alpha):
+    def __init__(self, dilation, in_channels, out_channels, r1, r2, att_type, stage, alpha,num_head):
         super(AttModule, self).__init__()
         self.feed_forward = ConvFeedForward(dilation, in_channels, out_channels)
         self.instance_norm = nn.InstanceNorm1d(in_channels, track_running_stats=False)
         # self.att_layer = AttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation, att_type=att_type,
         #                           stage=stage)  # dilation
-        self.att_layer = MultiHeadAttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation,stage=stage, att_type=att_type,num_head=4)  # dilation
+        self.att_layer = MultiHeadAttLayer(in_channels, in_channels, out_channels, r1, r1, r2, dilation,stage=stage, att_type=att_type,num_head=num_head)  # dilation
         self.conv_1x1 = nn.Conv1d(out_channels, out_channels, 1)
         self.dropout = nn.Dropout()
         self.alpha = alpha
@@ -263,13 +263,13 @@ class PositionalEncoding(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate, att_type, alpha):
+    def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate, att_type, alpha,num_head):
         super(Encoder, self).__init__()
         # self.conv_1x1 =  #nn.Conv1d(input_dim, num_f_maps, 1)  # fc layer
         self.PG = Prediction_Generation(num_layers=num_layers, num_f_maps=num_f_maps, dim=input_dim,
                                         num_classes=num_classes)
         self.layers = nn.ModuleList(
-            [AttModule(2 ** i, num_f_maps, num_f_maps, r1, r2, att_type, 'encoder', alpha) for i in  # 2**i
+            [AttModule(2 ** i, num_f_maps, num_f_maps, r1, r2, att_type, 'encoder', alpha,num_head) for i in  # 2**i
              range(num_layers)])
 
         self.conv_out = nn.Conv1d(num_f_maps, num_classes, 1)
@@ -299,11 +299,11 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, att_type, alpha,max_len=40000):
+    def __init__(self, num_layers, r1, r2, num_f_maps, input_dim, num_classes, att_type, alpha,num_head,max_len=40000):
         super(Decoder, self).__init__()  # self.position_en = PositionalEncoding(d_model=num_f_maps)
         self.conv_1x1 = nn.Conv1d(input_dim, num_f_maps, 1)
         self.layers = nn.ModuleList(
-            [AttModule(2 ** i, num_f_maps, num_f_maps, r1, r2, att_type, 'decoder', alpha) for i in  # 2 ** i
+            [AttModule(2 ** i, num_f_maps, num_f_maps, r1, r2, att_type, 'decoder', alpha,num_head=num_head) for i in  # 2 ** i
              range(num_layers)])
         self.conv_out = nn.Conv1d(num_f_maps, num_classes, 1)
 
@@ -318,13 +318,13 @@ class Decoder(nn.Module):
 
 
 class MyTransformer(nn.Module):
-    def __init__(self, num_decoders, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate):
+    def __init__(self, num_decoders, num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate,num_head):
         super(MyTransformer, self).__init__()
         self.encoder = Encoder(num_layers, r1, r2, num_f_maps, input_dim, num_classes, channel_masking_rate,
-                               att_type='sliding_att', alpha=1)
+                               att_type='sliding_att', alpha=1,num_head=num_head)
         self.decoders = nn.ModuleList([copy.deepcopy(
             Decoder(num_layers, r1, r2, num_f_maps, num_classes, num_classes, att_type='sliding_att',
-                    alpha=exponential_descrease(s))) for s in range(num_decoders)])  # num_decoders
+                    alpha=exponential_descrease(s),num_head=num_head)) for s in range(num_decoders)])  # num_decoders
         self.conv_bound = nn.Conv1d(num_f_maps, 3, 1)
     def forward(self, x, mask):
         mask=mask.unsqueeze(1).to(device)

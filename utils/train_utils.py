@@ -260,10 +260,11 @@ def validate(
                 batch_size = x.shape[0]
 
                 # compute output and loss
-                output_cls, output_bound = model(x)
+                output_cls, output_bound = model(x,mask)
 
                 loss = 0.0
-                loss += criterion_cls(output_cls, t, x)
+                loss += criterion_cls(output_cls[-1], t, x)
+                output_cls= output_cls[-1]
                 loss += criterion_bound(output_bound, b, mask)
 
                 # measure accuracy and record loss
@@ -575,6 +576,61 @@ def get_class_weight(num_class,dataframe):
     return class_weight,pos_weight
 
 
+def get_class_weight_u(num_class, dataframe):
+    nums = [0 for _ in range(num_class)]
+    bounds = [0 for _ in range(3)]
+
+    for idx, row in dataframe.iterrows():
+        # Handle both file paths and numpy arrays
+        labels_path = os.path.join(os.path.dirname(row['feature_path']), 'labels.npy')
+        boundaries_path = os.path.join(os.path.dirname(row['feature_path']), 'boundaries.npy')
+
+        # Check if labels and boundaries are file paths or numpy arrays
+        if isinstance(row['labels'], str) and row['labels'].endswith('.npy'):
+            label = np.load(labels_path)
+        else:
+            label = row['labels']
+
+        if isinstance(row['boundaries'], str) and row['boundaries'].endswith('.npy'):
+            boundary = np.load(boundaries_path)
+        else:
+            boundary = row['boundaries']
+
+        # Ignore -100 and 255 in label and boundary arrays
+        valid_label_mask = (label != -100) & (label != 255)
+        valid_boundary_mask = (boundary != -100) & (boundary != 255)
+
+        label = label[valid_label_mask]
+        boundary = boundary[valid_boundary_mask]
+
+        # Count label occurrences
+        num, cnt = np.unique(label, return_counts=True)
+        b, ct = np.unique(boundary, return_counts=True)
+
+        for n, c in zip(num, cnt):
+            nums[n] += c
+        for i, j in zip(b, ct):
+            bounds[i] += j
+
+    print(nums, bounds)
+
+    # Calculate class weights
+    class_num = torch.tensor(nums)
+    total = class_num.sum().item()
+    frequency = class_num.float() / total
+    median = torch.median(frequency)
+    class_weight = median / frequency
+
+    # Calculate boundary weights
+    pos_num = torch.tensor(bounds)
+    totalb = pos_num.sum().item()
+    frequencyb = pos_num.float() / totalb
+    medianb = torch.median(frequencyb)
+    pos_weight = medianb / frequencyb
+
+    print(class_weight, pos_weight)
+    return class_weight, pos_weight
+
 
 #
 # nums = [0 for i in range(8)]
@@ -626,3 +682,56 @@ def train_ddp(rank, world_size, train_loader, model, criterion_cls, criterion_bo
     # Your training logic goes here
 
     cleanup_ddp()
+
+
+import numpy as np
+import torch
+
+class EarlyStopping:
+    """Early stops the training if validation loss doesn't improve after a given patience."""
+    def __init__(self, patience=7, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
+        """
+        Args:
+            patience (int): How long to wait after last time validation loss improved.
+                            Default: 7
+            verbose (bool): If True, prints a message for each validation loss improvement.
+                            Default: False
+            delta (float): Minimum change in the monitored quantity to qualify as an improvement.
+                            Default: 0
+            path (str): Path for the checkpoint to be saved to.
+                            Default: 'checkpoint.pt'
+            trace_func (function): trace print function.
+                            Default: print
+        """
+        self.patience = patience
+        self.verbose = verbose
+        self.counter = 0
+        self.best_score = None
+        self.early_stop = False
+        self.val_loss_min = np.Inf
+        self.delta = delta
+        self.path = path
+        self.trace_func = trace_func
+    def __call__(self, val_loss, model):
+
+        score = -val_loss
+
+        if self.best_score is None:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+        elif score < self.best_score + self.delta:
+            self.counter += 1
+            self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
+            if self.counter >= self.patience:
+                self.early_stop = True
+        else:
+            self.best_score = score
+            self.save_checkpoint(val_loss, model)
+            self.counter = 0
+
+    def save_checkpoint(self, val_loss, model):
+        '''Saves model when validation loss decrease.'''
+        if self.verbose:
+            self.trace_func(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        torch.save(model.state_dict(), self.path)
+        self.val_loss_min = val_loss

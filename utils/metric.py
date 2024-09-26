@@ -4,7 +4,7 @@ import copy
 import csv
 from typing import Dict,List,Optional,Tuple
 import torch
-from clean_code_dgx.utils.transforms_asrf import GaussianSmoothing
+from utils.transforms_asrf import GaussianSmoothing
 
 def get_segments(
         frame_wise_label:np.ndarray,
@@ -102,23 +102,25 @@ def get_n_samples(
     hits = np.zeros(len(g_label))
 
     for j in range(len(p_label)):
-        intersection = np.minimum(p_end[j], g_end) - np.maximum(p_start[j], g_start)
-        union = np.maximum(p_end[j], g_end) - np.minimum(p_start[j], g_start)
-        IoU = (1.0 * intersection / union) * (
-            [p_label[j] == g_label[x] for x in range(len(g_label))]
-        )
+
+        # Ensure broadcasting is correct
+        intersection = np.minimum(p_end[j], np.array(g_end)) - np.maximum(p_start[j], np.array(g_start))
+        union = np.maximum(p_end[j], np.array(g_end)) - np.minimum(p_start[j], np.array(g_start))
+
+        # Compute IoU with label comparison
+        IoU = (1.0 * intersection / union) * (np.array(p_label[j]) == np.array(g_label))
+
         # Get the best scoring segment
-        idx = np.array(IoU).argmax()
+        idx = np.argmax(IoU)
 
         if IoU[idx] >= iou_threshold and not hits[idx]:
             tp += 1
             hits[idx] = 1
         else:
             fp += 1
-
     fn = len(g_label) - sum(hits)
 
-    return float(tp), float(fp), float(fn)
+    return int(tp), int(fp), int(fn)
 
 
 class ScoreMeter(object):
@@ -126,11 +128,11 @@ class ScoreMeter(object):
         self,
         id2class_map: Dict[int, str],
         iou_thresholds: Tuple[float] = (0.1, 0.25, 0.5),
-        ignore_index: int = 255,
+        ignore_indexes: Tuple[int] = (255,-100,-1),
     ) -> None:
 
         self.iou_thresholds = iou_thresholds  # threshold for f score
-        self.ignore_index = ignore_index
+        self.ignore_index = ignore_indexes
         self.id2class_map = id2class_map
         self.edit_score = 0
         self.tp = [0 for _ in range(len(iou_thresholds))]  # true positive
@@ -170,8 +172,13 @@ class ScoreMeter(object):
             preds = copy.copy(outputs)
 
         for pred, gt in zip(preds, gts):
-            pred = pred[gt != self.ignore_index]
-            gt = gt[gt != self.ignore_index]
+            pred = pred[gt not in self.ignore_index]
+            gt = gt[gt not in  self.ignore_index]
+
+            if isinstance(gt, np.ndarray):  # If gt is a numpy array
+                pred = pred[~np.isin(gt, self.ignore_index)]
+            else:  # If gt is a list
+                pred = [p for p, g in zip(pred, gt) if g not in self.ignore_index]
 
             for lt, lp in zip(pred, gt):
                 self.confusion_matrix += self._fast_hist(lt.flatten(), lp.flatten())
@@ -184,8 +191,8 @@ class ScoreMeter(object):
                     self.n_correct += 1
 
             # calculate the edit distance
-            p_label, p_start, p_end = get_segments(pred, self.id2class_map)
-            g_label, g_start, g_end = get_segments(gt, self.id2class_map)
+            p_label, p_start, p_end = get_segments(pred)
+            g_label, g_start, g_end = get_segments(gt)
 
             self.edit_score += levenshtein(p_label, g_label, norm=True)
 

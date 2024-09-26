@@ -1,74 +1,55 @@
-
 import torch
-import sys
 import os
-
-# Add the parent directory to the system path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-# Now you can safely imp import create_dataframes, RARPDataset, collate_fn
-# from pathlib import Path
-# sys.path.append(r'\home\ubuntu\Dropbox\Rezowan_codebase\dgx_code\clean_code_dgx')
-# print("Python path:", sys.path)
-# Add the project root directory to the Python path
-# sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-# f=Path(__file__).parents[1]
-# print(f)
-# sys.path.append(os.path.abspath(Path(__file__).parents[1]))
-
-from models import asformer,asrf,my_asrf_asformer, mymodel
-# import models.my_asrf_asformer
-import torch.nn.functional as F
-
-
-from clean_code_dgx.datasets.rarp  import create_dataframes, RARPDataset, collate_fn
-
-# create_dataframes,RARPDataset,collate_fn
-import random
+from clean_code_dgx.libs.datasets.cholec80 import create_cholec_df
+from clean_code_dgx.models import mymodel
 
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from models import asrf
-from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
+from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint,get_class_weight_u
 from train.config import Config
 from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
-config= Config()
+from clean_code_dgx.libs.datasets.cholec80 import CholecDataset,collate_fn
 
-
-sample_rate = 2
-actions_dict={0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7}
-num_classes = len(actions_dict)
-model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/mymodel/myasformer"
-results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/mymodel/myasformer"
-root_folder= "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/"
-if not os.path.exists(model_dir):
-    os.makedirs(model_dir)
-if not os.path.exists(results_dir):
-    os.makedirs(results_dir)
-base_train_dir = '/home/ubuntu/Dropbox/Datasets/RARP_datasets/rarp_train_u'
-video_filename ='video_left.avi'
-feature_filename ='feat_2048.npy'
-annot_filename ='action_continuous.txt'
+config = Config()
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-base_test_dir= '/home/ubuntu/Dropbox/Datasets/RARP_datasets/rarp_test_u'
-# cpu or cuda
-device = "cuda" if torch.cuda.is_available() else "cpu"
-if device == "cuda":
-    torch.backends.cudnn.benchmark = True  # Optimizes performance for your GPU
+sample_rate=5
+cholec_root = "/home/ubuntu/Dropbox/Datasets/cholec80"
 
-# create dataframe
-# =================================================================
-train_dataframe = create_dataframes(base_train_dir,video_filename,feature_filename,annot_filename)
-test_dataframe = create_dataframes(base_test_dir,video_filename,feature_filename,annot_filename)
-# print('train df ',train_dataframe)
-# print('test df ',test_dataframe)
+action_dict = {"Preparation": 0,
+               "CalotTriangleDissection": 1,
+               "ClippingCutting": 2,
+               "GallbladderDissection": 3,
+               "GallbladderRetraction": 4,
+               "CleaningCoagulation": 5,
+               "GallbladderPackaging": 6}
+root_folder ='.'
+import pandas as pd
+num_classes= len(action_dict)
+
+
+file_name= 'cholec_df.csv'
+# Check if the file exists
+if os.path.exists(file_name):
+    # Load the DataFrame from the file
+    cholec_df = pd.read_csv(file_name)
+    print(f"Loaded DataFrame from {file_name}:")
+else:
+    # If file doesn't exist, create a new DataFrame
+    print(f"{file_name} not found, creating a new DataFrame.")
+    cholec_df = create_cholec_df(cholec_root, action_dict, sample_rate=sample_rate)
+
+    # Save the DataFrame to a CSV file
+    cholec_df.to_csv(file_name, index=False)
+    print(f"New DataFrame created and saved to {file_name}.")
+
 batch_size=1
 
-train_data = RARPDataset(
-        train_dataframe[:5],
+train_data = CholecDataset(
+        cholec_df,
         root_folder,
         num_classes,
-        actions_dict,
+        action_dict,
         sample_rate=sample_rate,
     )
 
@@ -82,11 +63,12 @@ train_loader = DataLoader(
         pin_memory=True
     )
 
-test_data = RARPDataset(
-        test_dataframe[:2],
+
+test_data = CholecDataset(
+        cholec_df[70:],
         root_folder,
         num_classes,
-        actions_dict,
+        action_dict,
         sample_rate=sample_rate,
     )
 
@@ -99,13 +81,13 @@ val_loader = DataLoader(
         collate_fn=collate_fn,
         pin_memory=True
     )
-channel_masking_rate=0.3
+channel_masking_rate= 0.3
 
 # model = models.asrf.ActionSegmentRefinementFramework(
 #     in_channel=2048,n_features=64,n_classes=num_classes,n_stages=4,n_stages_asb=4,n_stages_brb=4,n_layers=10,)
-model = asformer.MyTransformer(3,config.n_layers,2,2,config.n_features,config.in_channel,num_classes,0.3)
+# model = asformer.MyTransformer(3,config.n_layers,2,2,config.n_features,config.in_channel,num_classes,0.3)
 
-# model = mymodel.MyAsformer(3,config.n_layers,config.n_features,config.in_channel,num_classes,channel_masking_rate,device)
+model = mymodel.MyAsformer(3,config.n_layers,config.n_features,config.in_channel,num_classes,channel_masking_rate,device)
 if torch.cuda.device_count() > 1:
     print(f"Using {torch.cuda.device_count()} GPUs!")
     model = torch.nn.DataParallel(model)
@@ -138,7 +120,7 @@ begin_epoch = 0
 best_loss = float("inf")
 log = pd.DataFrame(columns=columns)
 
-result_path = results_dir
+result_path = root_folder
 if config.resume:
     if os.path.exists(os.path.join(result_path, "checkpoint.pth")):
         checkpoint = resume(result_path, model, optimizer)
@@ -151,9 +133,9 @@ if config.resume:
 
 # criterion for loss
 if config.class_weight:
-    class_weight,boundary_weight = get_class_weight(
+    class_weight,boundary_weight = get_class_weight_u(
         num_classes,
-        train_dataframe,
+        cholec_df,
     )
     class_weight = class_weight.to(device)
 else:
@@ -180,7 +162,7 @@ print("---------- Start training ----------")
 
 for epoch in range(begin_epoch, config.max_epoch):
     # training
-    train_loss = train(
+    train_loss = train_ef(
         train_loader,
         model,
         criterion_cls,

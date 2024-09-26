@@ -2,9 +2,9 @@
 from typing import Any, Dict, Tuple
 class Config:
     model: str = "RarpDataset"
-    n_layers: int = 4
-    n_stages: int = 4  # for ms-tcn
-    n_features: int = 512
+    n_layers: int = 6
+    n_stages: int = 2 # for ms-tcn
+    n_features: int = 256
     n_stages_asb: int = 4
     n_stages_brb: int = 4
 
@@ -41,7 +41,7 @@ class Config:
     weight_decay: float = 0.00001  # weight decay
     nesterov: bool = True  # enables Nesterov momentum
 
-    param_search: bool = False
+    param_search: bool = True
 
     # thresholds for calcualting F1 Score
     iou_thresholds: Tuple[float, ...] = (0.1, 0.25, 0.5)

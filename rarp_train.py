@@ -19,14 +19,14 @@ import random
 from torch.utils.data import DataLoader
 from torchvision.transforms import Compose
 from models import asrf
-from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint
+from utils.train_utils import train,train_ef,validate,evaluate,get_optimizer,get_class_weight,resume,save_checkpoint,get_class_weight_u,EarlyStopping
 from train.config import Config
 from losses.focal_tmse import ActionSegmentationLoss,BoundaryRegressionLoss
 config = Config()
 
 
 sample_rate = 2
-actions_dict={0:0, 1:1, 2:2, 3:3, 4:4, 5:5, 6:6, 7:7}
+actions_dict={'0':0, '1':1, '2':2, '3':3, '4':4, '5':5, '6':6, '7':7}
 num_classes = len(actions_dict)
 model_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/model_out/mymodel/myasformer"
 results_dir = "/home/ubuntu/Dropbox/Rezowan_codebase/dgx_code/output/result/mymodel/myasformer"
@@ -57,7 +57,7 @@ test_dataframe.sort_values(by='frames', ascending=True)
 batch_size=1
 
 train_data = RARPDataset(
-        train_dataframe,
+        train_dataframe[:10],
         root_folder,
         num_classes,
         actions_dict,
@@ -75,7 +75,7 @@ train_loader = DataLoader(
     )
 
 test_data = RARPDataset(
-        test_dataframe[:2],
+        test_dataframe[:4],
         root_folder,
         num_classes,
         actions_dict,
@@ -130,6 +130,7 @@ begin_epoch = 0
 best_loss = float("inf")
 log = pd.DataFrame(columns=columns)
 
+early_stopping = EarlyStopping(patience=config.tolerance, verbose=True)
 result_path = results_dir
 if config.resume:
     if os.path.exists(os.path.join(result_path, "checkpoint.pth")):
@@ -143,7 +144,7 @@ if config.resume:
 
 # criterion for loss
 if config.class_weight:
-    class_weight,boundary_weight = get_class_weight(
+    class_weight,boundary_weight = get_class_weight_u(
         num_classes,
         train_dataframe,
     )
@@ -212,10 +213,12 @@ for epoch in range(begin_epoch, config.max_epoch):
             device,
             config.dataset,
             config.dataset_dir,
+            actions_dict,
             config.iou_thresholds,
             config.boundary_th,
             config.tolerance,
         )
+        early_stopping(val_loss, model)
 
         # save a model if top1 acc is higher than ever
         if best_loss > val_loss:
