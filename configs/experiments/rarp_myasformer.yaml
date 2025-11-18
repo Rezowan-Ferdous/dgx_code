@@ -1,0 +1,85 @@
+# RARP dataset with MyAsformer model
+# Robotic-Assisted Radical Prostatectomy action segmentation
+
+experiment_name: "rarp_myasformer_v1"
+project_name: "surgical_action_recognition"
+description: "RARP dataset training with MyAsformer model"
+seed: 42
+
+output_dir: "./experiments"
+
+# Model configuration
+model:
+  name: "MyAsformer"
+  n_layers: 6
+  n_features: 256
+  in_channel: 2048
+  num_classes: 8  # RARP has 8 action classes
+  channel_masking_rate: 0.3
+  dropout: 0.5
+
+# Dataset configuration
+data:
+  name: "RARP"
+  data_root: "/path/to/rarp/dataset"
+  feature_dim: 2048
+  batch_size: 1
+  num_workers: 4
+  # Define your train/val/test splits
+  train_split: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  val_split: [13, 14]
+  test_split: [15, 16, 17, 18, 19, 20]
+
+# Optimizer configuration
+optimizer:
+  name: "Adam"
+  learning_rate: 0.00005
+  weight_decay: 0.00001
+
+# Loss configuration
+loss:
+  ce: true
+  focal: false
+  tmse: false
+  gstmse: true
+  ce_weight: 1.0
+  gstmse_weight: 1.0
+  tmse_weight: 0.15
+  use_class_weight: true
+
+# Training configuration
+training:
+  max_epochs: 120
+  early_stopping_patience: 10
+  gradient_accumulation_steps: 1
+  mixed_precision: true
+  save_checkpoints: true
+  checkpoint_interval: 5
+  save_best_only: false
+  val_interval: 1
+  use_multi_gpu: false
+
+# Evaluation configuration
+evaluation:
+  iou_thresholds: [0.1, 0.25, 0.5]
+  compute_accuracy: true
+  compute_f1: true
+  compute_edit_score: true
+  compute_boundary_metrics: true
+
+# Visualization configuration
+visualization:
+  use_tensorboard: true
+  log_interval: 10
+  generate_plots: true
+  plot_predictions: true
+  plot_confusion_matrix: true
+
+# Reporting configuration
+reporting:
+  generate_html_report: true
+  save_metrics_csv: true
+  save_predictions: true
+  include_training_curves: true
+  include_confusion_matrix: true
+  include_per_class_metrics: true
