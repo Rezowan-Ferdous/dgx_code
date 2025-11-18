@@ -1,0 +1,100 @@
+# Default configuration template for experiments
+# Copy and modify this file for your specific experiments
+
+# Experiment metadata
+experiment_name: "default_experiment"
+project_name: "surgical_action_recognition"
+description: "Default experiment configuration"
+seed: 42
+
+# Output paths
+output_dir: "./experiments"
+log_dir: null  # Will be set automatically to output_dir/experiment_name/logs
+checkpoint_dir: null  # Will be set automatically
+
+# Model configuration
+model:
+  name: "MyAsformer"
+  n_layers: 6
+  n_features: 256
+  in_channel: 2048
+  num_classes: 8
+  channel_masking_rate: 0.3
+  dropout: 0.5
+  extra_params: {}
+
+# Dataset configuration
+data:
+  name: "RARP"
+  data_root: "/path/to/dataset"
+  feature_dim: 2048
+  batch_size: 1
+  num_workers: 4
+  train_split: [1, 2, 3, 4, 5]
+  val_split: [6, 7]
+  test_split: [8, 9, 10]
+  augmentation: {}
+
+# Optimizer configuration
+optimizer:
+  name: "Adam"
+  learning_rate: 0.00005
+  weight_decay: 0.00001
+  momentum: 0.9
+  scheduler: null
+  scheduler_params: {}
+
+# Loss configuration
+loss:
+  ce: true
+  focal: false
+  tmse: false
+  gstmse: true
+  ce_weight: 1.0
+  focal_weight: 1.0
+  tmse_weight: 0.15
+  gstmse_weight: 1.0
+  lambda_b: 0.1
+  use_class_weight: true
+
+# Training configuration
+training:
+  max_epochs: 120
+  early_stopping_patience: 5
+  gradient_accumulation_steps: 1
+  mixed_precision: true
+  save_checkpoints: true
+  checkpoint_interval: 10
+  save_best_only: false
+  val_interval: 1
+  use_multi_gpu: false
+  gpu_ids: null
+
+# Evaluation configuration
+evaluation:
+  iou_thresholds: [0.1, 0.25, 0.5]
+  boundary_threshold: 0.5
+  compute_accuracy: true
+  compute_f1: true
+  compute_edit_score: true
+  compute_boundary_metrics: true
+
+# Visualization configuration
+visualization:
+  use_tensorboard: true
+  log_interval: 10
+  generate_plots: true
+  plot_predictions: true
+  plot_confusion_matrix: true
+  save_prediction_videos: false
+
+# Reporting configuration
+reporting:
+  generate_html_report: true
+  generate_pdf_report: false
+  save_metrics_csv: true
+  save_predictions: true
+  include_training_curves: true
+  include_confusion_matrix: true
+  include_per_class_metrics: true
+  include_sample_predictions: true
