@@ -145,6 +145,73 @@ dgx_code/
 
 ## 🎯 Quick Start
 
+### 🚀 State-of-the-Art Task Execution
+
+Run any task with just a few lines of code:
+
+#### Vision Classification
+```python
+from task_runner import TaskRunner
+
+# Create task with Vision Transformer
+runner = TaskRunner(
+    domain='vision',
+    task='classification',
+    model_architecture='vit',
+    model_variant='base',
+    num_classes=10
+)
+
+# Load CIFAR-10 and train
+loaders = runner.prepare_data('cifar10', batch_size=128)
+runner.train(loaders['train'], loaders['val'], epochs=100)
+```
+
+#### Time Series Forecasting
+```python
+# LSTM for time series forecasting
+runner = TaskRunner(
+    domain='time_series',
+    task='forecasting',
+    model_architecture='lstm',
+    forecast_length=24
+)
+
+loaders = runner.prepare_data('electricity', batch_size=32)
+runner.train(loaders['train'], loaders['val'], epochs=50)
+```
+
+#### Text Classification
+```python
+# BERT for sentiment analysis
+runner = TaskRunner(
+    domain='nlp',
+    task='text_classification',
+    model_architecture='bert',
+    model_variant='base',
+    num_classes=2
+)
+
+loaders = runner.prepare_data('imdb', batch_size=16)
+runner.train(loaders['train'], epochs=3)
+```
+
+**Or use one-line convenience functions:**
+```python
+from task_runner import run_vision_task, run_time_series_task, run_nlp_task
+
+# Vision: ResNet50 on CIFAR-10
+run_vision_task('classification', 'resnet50', 'cifar10', epochs=100)
+
+# Time Series: Transformer forecasting
+run_time_series_task('forecasting', 'transformer', 'electricity', epochs=50)
+
+# NLP: RoBERTa sentiment analysis
+run_nlp_task('text_classification', 'roberta_large', 'imdb', epochs=3)
+```
+
+**See [TASK_GUIDE.md](TASK_GUIDE.md) for complete documentation and examples.**
+
 ### For Learners
 
 #### 1. **Linear Algebra → Deep Learning Path**
@@ -157,9 +224,8 @@ python 01_vectors_matrices.py
 cd ../deep_learning
 python 01_neural_networks_from_scratch.py
 
-# Apply to real problems
-cd ../../domains/computer_vision/classification
-python train_resnet.py --config configs/cifar10.yaml
+# Apply to real problems with state-of-the-art models
+python examples/vision_classification_example.py
 ```
 
 #### 2. **Algorithms & Data Structures**
@@ -274,12 +340,39 @@ python benchmark.py --models yolov8,faster_rcnn --dataset coco
 
 ## 🚀 Features
 
+### 🎯 State-of-the-Art Task Runner
+- **Unified API** for vision, time series, and NLP tasks
+- **100+ Pre-trained Models** ready to use
+- **20+ Popular Datasets** with automatic downloading
+- **One-line Task Execution** with sensible defaults
+- See [TASK_GUIDE.md](TASK_GUIDE.md) for comprehensive documentation
+
 ### 🎨 Modular Training Framework
 - YAML-based configuration
-- Mixed precision training
+- Mixed precision training (AMP)
 - Multi-GPU support
 - TensorBoard integration
-- Automated reporting
+- Automated reporting with HTML/JSON output
+
+### 🧠 State-of-the-Art Models
+
+**Computer Vision:**
+- Vision Transformers (ViT, Swin, DeiT, BEiT)
+- CNNs (ResNet, EfficientNet, ConvNeXt, RegNet)
+- Self-Supervised (DINO, MAE)
+- Hybrid (CoAtNet, MaxViT)
+
+**Time Series:**
+- Transformers for forecasting
+- N-BEATS (interpretable forecasting)
+- LSTM/GRU models
+- Multivariate forecasting support
+
+**NLP:**
+- BERT, RoBERTa, DeBERTa
+- Domain-specific (BioBERT, SciBERT, FinBERT)
+- Lightweight (DistilBERT, ALBERT)
+- GPT-2 for generation
 
 ### 📊 Comprehensive Evaluation
 - Standard metrics for all domains
@@ -298,6 +391,7 @@ python benchmark.py --models yolov8,faster_rcnn --dataset coco
 - Interactive tutorials
 - Exercise problems with solutions
 - Curated paper lists
+- Ready-to-run examples
 
 ## 🎓 Supported Tasks
 
@@ -371,36 +465,68 @@ training:
 
 ## 📚 Documentation
 
-- [Framework Documentation](FRAMEWORK_README.md)
-- [Quick Start Guide](QUICK_START_GUIDE.md)
-- [API Reference](docs/api/)
-- [Learning Roadmaps](docs/roadmaps/)
-- [Contributing Guide](CONTRIBUTING.md)
+- **[Task Guide](TASK_GUIDE.md)** - Complete guide for vision, time series, and NLP tasks
+- [Framework Documentation](FRAMEWORK_README.md) - Modular training framework
+- [Quick Start Guide](QUICK_START_GUIDE.md) - Get started quickly
+- [Feature Extraction](feature_extraction/README.md) - CNN, Transformer, multi-modal extractors
+- [API Reference](docs/api/) - API documentation
+- [Learning Roadmaps](docs/roadmaps/) - Learning paths
+- [Contributing Guide](CONTRIBUTING.md) - How to contribute
 
 ## 🎯 Example Projects
 
-### 1. Surgical Action Recognition
+### Ready-to-Run Examples
+
+```bash
+# Vision: Image classification with ViT
+python examples/vision_classification_example.py
+
+# Time Series: Forecasting with Transformer
+python examples/time_series_forecasting_example.py
+
+# NLP: Sentiment analysis with BERT
+python examples/nlp_text_classification_example.py
+```
+
+### Domain-Specific Projects
+
+#### 1. Surgical Action Recognition
 ```bash
 cd domains/computer_vision/surgical_action_recognition
 python run_experiment.py --config configs/rarp_myasformer.yaml --mode full
 ```
 
-### 2. Object Detection
-```bash
-cd domains/computer_vision/object_detection
-python train.py --model yolov8 --dataset coco --epochs 100
+#### 2. Vision Classification (CIFAR-10, ImageNet)
+```python
+from task_runner import run_vision_task
+
+# ResNet50 on CIFAR-10
+run_vision_task('classification', 'resnet50', 'cifar10', epochs=100)
+
+# EfficientNet on ImageNet
+run_vision_task('classification', 'efficientnet_b0', 'imagenet', epochs=300)
 ```
 
-### 3. Text Classification
-```bash
-cd domains/nlp/text_classification
-python train_bert.py --dataset imdb --task sentiment
+#### 3. Time Series Forecasting
+```python
+from task_runner import run_time_series_task
+
+# LSTM forecasting
+run_time_series_task('forecasting', 'lstm', 'electricity', epochs=50)
+
+# N-BEATS for interpretable forecasting
+run_time_series_task('forecasting', 'nbeats', 'traffic', epochs=100)
 ```
 
-### 4. Visual Question Answering
-```bash
-cd domains/vlm/visual_qa
-python train.py --model vilt --dataset vqa2
+#### 4. Text Classification & NLP
+```python
+from task_runner import run_nlp_task
+
+# BERT for sentiment analysis
+run_nlp_task('text_classification', 'bert_base', 'imdb', epochs=3)
+
+# RoBERTa for topic classification
+run_nlp_task('text_classification', 'roberta_large', 'ag_news', epochs=5)
 ```
 
 ## 🏆 Benchmarks
